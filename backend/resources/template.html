@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DLNM —— 时间序列分析在环境健康中的应用</title>
+<style>
+/* ========== 全局样式 ========== */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&display=swap');
+
+:root {
+  --blue:   #1565C0; --blue-l: #42A5F5; --blue-bg: #E3F2FD;
+  --orange: #E65100; --orange-l:#FF9800; --orange-bg:#FFF3E0;
+  --red:    #C62828; --purple: #7B1FA2; --grey:  #455A64;
+  --light:  #F5F5F5; --white: #FFFFFF; --dark:  #263238;
+  --w: 1280px; --h: 720px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Microsoft YaHei','Noto Sans SC','SimHei',sans-serif;
+  background: #e8e8e8; color: var(--dark);
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:20px 0;
+}
+
+/* ========== 幻灯片容器 ========== */
+.slide {
+  width: var(--w); height: var(--h); position: relative;
+  background: var(--white); overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  page-break-after: always;
+  flex-shrink: 0;
+}
+.slide.cover { background: linear-gradient(135deg, #0D47A1 0%, #1565C0 50%, #1E88E5 100%); color:#fff; }
+.slide.end   { background: linear-gradient(135deg, #263238 0%, #455A64 100%); color:#fff; }
+
+/* ========== 通用组件 ========== */
+.slide-title {
+  position:absolute; top:24px; left:60px; right:60px;
+  font-size:32px; font-weight:900; line-height:1.2;
+}
+.slide-num {
+  position:absolute; top:28px; right:50px;
+  font-size:14px; opacity:0.5; font-weight:400;
+}
+.bar-top {
+  position:absolute; top:0; left:0; right:0; height:5px;
+  background: linear-gradient(90deg, var(--blue), var(--blue-l));
+}
+.bar-top.orange { background: linear-gradient(90deg, var(--orange), var(--orange-l)); }
+
+/* 卡片 */
+.card {
+  background: var(--light); border-radius:12px; padding:24px 28px;
+}
+.card.blue  { background:var(--blue-bg);  border-left:4px solid var(--blue); }
+.card.orange{ background:var(--orange-bg);border-left:4px solid var(--orange); }
+.card.red   { background:#FFEBEE;         border-left:4px solid var(--red); }
+
+/* 表格 */
+table { border-collapse:collapse; width:100%; font-size:14px; }
+th { background:var(--blue); color:#fff; padding:10px 14px; text-align:left; font-weight:700; }
+td { padding:8px 14px; border-bottom:1px solid #e0e0e0; }
+tr:nth-child(even) td { background:#fafafa; }
+th.hl, td.hl { background:var(--blue-bg); font-weight:700; color:var(--blue); }
+th.ohl, td.ohl { background:var(--orange-bg); font-weight:700; color:var(--orange); }
+
+/* 标签 */
+.tag {
+  display:inline-block; padding:4px 14px; border-radius:20px;
+  font-size:13px; font-weight:700;
+}
+.tag.blue  { background:var(--blue-bg); color:var(--blue); }
+.tag.orange{ background:var(--orange-bg); color:var(--orange); }
+.tag.red   { background:#FFEBEE; color:var(--red); }
+.tag.green { background:#E8F5E9; color:#2E7D32; }
+
+/* ========== 封面 ========== */
+.cover-center {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%); text-align:center; width:80%;
+}
+.cover-center h1 { font-size:42px; font-weight:900; margin-bottom:20px; line-height:1.3; }
+.cover-center h2 { font-size:22px; font-weight:400; opacity:0.9; margin-bottom:40px; }
+.cover-center .info { font-size:16px; opacity:0.7; }
+
+/* ========== 布局辅助 ========== */
+.row { display:flex; gap:20px; }
+.col { flex:1; }
+.col-2 { flex:2; }
+.box {
+  border:2px solid var(--blue); border-radius:12px;
+  padding:20px 24px; text-align:center;
+}
+.box.highlight {
+  background:var(--blue); color:#fff; font-size:18px; font-weight:700;
+}
+.box.grey { border-color:#bdbdbd; background:#fafafa; }
+.cross { color:var(--red); font-size:24px; font-weight:900; }
+.check { color:#2E7D32; font-size:20px; }
+
+/* ========== 图占位 ========== */
+.fig {
+  width:100%; height:100%; object-fit:contain; border-radius:8px;
+}
+
+/* 脚注 */
+.footnote {
+  position:absolute; bottom:18px; left:60px; right:60px;
+  font-size:12px; opacity:0.5;
+}
+
+/* 打印样式 */
+@page {
+  size: 1280px 720px;
+  margin: 0;
+}
+@media print {
+  body { background:#fff; gap:0; padding:0; width:1280px; }
+  .slide { box-shadow:none; page-break-after:always; margin:0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ================================================================ -->
+<!-- 第1页：封面 -->
+<!-- ================================================================ -->
+<div class="slide cover">
+  <div class="cover-center">
+    <h1>分布滞后非线性模型（DLNM）<br>—— 时间序列分析在环境健康中的应用</h1>
+    <h2>案例：2020—2023年马鞍山市大气颗粒物<br>对居民心脑血管疾病死亡的影响</h2>
+    <div class="info">汇报人：________ ｜ 日期：2026年__月__日</div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第2页：问题引入 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">时间序列分析能做什么？</div>
+  <div class="slide-num">2 / 15</div>
+
+  <div style="position:absolute; top:100px; left:60px; right:60px;">
+    <div class="card blue" style="font-size:18px; font-weight:700; margin-bottom:24px; text-align:center;">
+      空气污染加重 → 几天后心脑血管急诊增多？影响持续多久？什么浓度开始有害？
+    </div>
+  </div>
+
+  <div style="position:absolute; top:210px; left:60px; right:60px;">
+    <table>
+      <tr><th style="width:35%">研究问题</th><th style="width:17%;text-align:center">简单线性回归</th><th style="width:17%;text-align:center">传统GLM/GAM</th><th style="width:17%;text-align:center;background:var(--blue-l)">DLNM</th></tr>
+      <tr><td>暴露-反应可能是非线性的</td><td style="text-align:center;color:var(--red)">✗ 无法处理</td><td style="text-align:center;color:#2E7D32">✓ 可处理</td><td style="text-align:center;color:#2E7D32;font-weight:700">✓</td></tr>
+      <tr><td>效应可能延迟几天出现</td><td style="text-align:center;color:var(--red)">✗ 无法处理</td><td style="text-align:center;color:#FF9800">需手动设滞后</td><td style="text-align:center;color:#2E7D32;font-weight:700">✓ 自动建模</td></tr>
+      <tr><td>需要<b>同时</b>刻画非线性×滞后</td><td style="text-align:center;color:var(--red)">✗</td><td style="text-align:center;color:var(--red)">✗</td><td style="text-align:center;font-size:16px;font-weight:900;color:var(--blue)">✓ 核心优势</td></tr>
+      <tr><td>PM2.5每升高10μg, 几天后CVD死亡增加多少?</td><td style="text-align:center;color:#999">给不出答案</td><td style="text-align:center;color:#999">给不出答案</td><td class="hl" style="text-align:center">给出完整答案</td></tr>
+    </table>
+  </div>
+
+  <div style="position:absolute; bottom:80px; left:60px; right:60px;">
+    <div class="box highlight">
+      用一个<u>二维函数</u>同时描述"浓度多大 → 风险多高" 和 "暴露多久后 → 效应多大"
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第3页：DLNM 模型概述 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">DLNM 模型概述 —— 为什么需要这个模型</div>
+  <div class="slide-num">3 / 15</div>
+
+  <!-- 传统 vs DLNM -->
+  <div style="position:absolute; top:100px; left:60px; right:60px;">
+    <div class="row">
+      <div class="col box grey" style="font-size:16px; padding:18px;">
+        <div style="color:#999;font-size:13px;margin-bottom:6px;">传统模型（只看一维）</div>
+        <code style="font-size:18px;">Risk = f ( 污染物浓度 )</code>
+      </div>
+      <div style="font-size:36px; color:var(--blue); display:flex; align-items:center; justify-content:center; font-weight:900;">→</div>
+      <div class="col box" style="font-size:16px; padding:18px; border-color:var(--blue);">
+        <div style="color:var(--blue);font-size:13px;margin-bottom:6px;font-weight:700;">DLNM（同时看两维）</div>
+        <code style="font-size:18px;">Risk = f ( 污染物浓度 , 滞后天数 )</code>
+        <div style="margin-top:10px;font-size:13px;color:#666;">
+          <span class="tag blue">暴露-反应维</span> &nbsp;+&nbsp; <span class="tag orange">滞后-效应维</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 三个概念 -->
+  <div style="position:absolute; top:280px; left:60px; right:60px;">
+    <div class="row" style="gap:16px;">
+      <div class="col card blue" style="text-align:center;">
+        <div style="font-size:40px;margin-bottom:8px;">📈</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;">暴露-反应关系</div>
+        <div style="font-size:13px;color:#555;">浓度每升10μg/m³<br>风险增加多少？<br>可能是<u>非线性</u>的</div>
+      </div>
+      <div class="col card orange" style="text-align:center;">
+        <div style="font-size:40px;margin-bottom:8px;">⏱️</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;">滞后效应</div>
+        <div style="font-size:13px;color:#555;">今天吸入的PM2.5<br>第几天效应最大？<br>效应是<u>延迟</u>出现的</div>
+      </div>
+      <div class="col card" style="text-align:center; border:2px solid var(--blue); background:var(--blue-bg);">
+        <div style="font-size:40px;margin-bottom:8px;">🔀</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--blue)">交叉基函数</div>
+        <div style="font-size:13px;color:#555;">将两个维度<u>"乘"</u>在一起<br>形成一张<br><b>二维效应面</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 半透明水印提示 -->
+  <div style="position:absolute; top:430px; left:60px; right:60px; text-align:center; font-size:18px; color:#bbb; opacity:0.30; font-weight:700; letter-spacing:3px;">
+    GAM 框架 × 滞后建模 = 环境流行病学标准方法
+  </div>
+
+  <!-- 底部总结 -->
+  <div style="position:absolute; bottom:70px; left:60px; right:60px;">
+    <div class="card blue" style="text-align:center;font-size:17px;font-weight:700;">
+      DLNM = GAM 的扩展：用<u>交叉基函数</u>替代传统线性项，同时拟合<u>非线性</u>和<u>滞后</u>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第4页：交叉基函数 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">交叉基函数 —— DLNM 的核心构造</div>
+  <div class="slide-num">4 / 15</div>
+
+  <!-- 左：公式 -->
+  <div style="position:absolute; top:90px; left:40px; width:420px;">
+    <div style="font-size:28px; font-weight:900; color:var(--blue); text-align:center; margin-bottom:16px;">
+      s ( x , l ) = f ( x ) ⊗ w ( l )
+    </div>
+    <table style="font-size:13px;">
+      <tr><td style="width:60px;font-weight:700;">x</td><td>暴露浓度</td></tr>
+      <tr><td style="font-weight:700;">l</td><td>滞后天数</td></tr>
+      <tr><td style="font-weight:700;">f(x)</td><td>暴露-反应基函数（ns, df=3）</td></tr>
+      <tr><td style="font-weight:700;">w(l)</td><td>滞后-效应基函数（ns, df=3, 0~7d）</td></tr>
+      <tr><td style="font-weight:700;">⊗</td><td>张量积 → 二维效应面</td></tr>
+    </table>
+    <div class="card red" style="margin-top:16px;font-size:14px;font-weight:700;text-align:center;">
+      优势：不用为每个滞后天数单独建模<br>整张效应面一次拟合完成
+    </div>
+  </div>
+
+  <!-- 右：图 -->
+  <div style="position:absolute; top:90px; right:40px; width:750px; height:580px;">
+    <img class="fig" src="ppt_figures/fig7_crossbasis_concept.png" alt="交叉基函数概念图">
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第5页：模型方程与参数体系 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">模型方程与参数体系</div>
+  <div class="slide-num">5 / 15</div>
+
+  <!-- 核心方程 -->
+  <div style="position:absolute; top:100px; left:60px; right:60px;">
+    <div class="card" style="text-align:center; padding:20px; font-size:18px; background:var(--blue-bg); border:2px solid var(--blue);">
+      <code style="font-size:18px; line-height:1.6;">
+        Log[E(Y<sub>t</sub>)] = α +
+        <span style="background:#FFEBEE;padding:2px 8px;border-radius:4px;color:var(--red);font-weight:700;">cb(S, lags)</span>
+        + ns(其他污染物, df) + ns(气象, df) + ns(时间, df) + DOW
+      </code>
+    </div>
+  </div>
+
+  <!-- 参数表 -->
+  <div style="position:absolute; top:220px; left:60px; right:60px; font-size:13px;">
+    <table>
+      <tr><th style="width:20%">方程项</th><th style="width:25%">角色</th><th>本案例取值</th></tr>
+      <tr><td>Log[E(Y<sub>t</sub>)]</td><td>连接函数</td><td>Log（线性预测值 → 正值）</td></tr>
+      <tr><td>α</td><td>截距项</td><td>基线死亡风险</td></tr>
+      <tr class="hl"><td><b>cb(S, lags)</b></td><td><b>→ 核心交叉基 ←</b></td><td>暴露维 ns(df=3) × 滞后维 ns(df=3, lag 0~7)</td></tr>
+      <tr><td>ns(其他污染物)</td><td>控制共存污染物混杂</td><td>排除 rs > 0.6 的变量</td></tr>
+      <tr><td>ns(气象)</td><td>控制气象混杂</td><td>温度+气压+湿度+风速，ns(df=3)</td></tr>
+      <tr><td>ns(时间)</td><td>去除长期趋势和季节性</td><td>ns(df=6/年)，AIC=10,753 最优</td></tr>
+      <tr><td>DOW</td><td>控制一周逐日波动</td><td>星期哑变量（周一至周日）</td></tr>
+    </table>
+  </div>
+
+  <!-- 半透明提示 -->
+  <div style="position:absolute; bottom:140px; left:60px; right:60px; text-align:center; font-size:15px; color:#999; opacity:0.35; line-height:1.8;">
+    建模提示： PM2.5 和 PM10 分别建模（rs=0.845） ｜ 排除 rs > 0.6 的共线变量 ｜ Quasi-Poisson 处理过度离散
+  </div>
+
+  <!-- 分布选择 -->
+  <div style="position:absolute; bottom:70px; left:60px; right:60px;">
+    <div class="card" style="font-size:14px; text-align:center; background:var(--orange-bg); border:1px solid var(--orange);">
+      <b>分布选择：Quasi-Poisson</b> &nbsp;｜&nbsp; CVD 每日死亡是小概率事件，数据存在过度离散（φ > 1）
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第6页：建模全流程 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">建模全流程 —— 从数据准备到结果输出</div>
+  <div class="slide-num">6 / 15</div>
+
+  <!-- 流程图图片 -->
+  <div style="position:absolute; top:80px; left:20px; right:20px; bottom:85px;">
+    <img class="fig" src="ppt_figures/fig6_modeling_flowchart.png" alt="建模全流程">
+  </div>
+
+  <!-- R代码 -->
+  <div style="position:absolute; bottom:10px; left:40px; right:40px;">
+    <div class="card" style="font-size:10px; font-family:Consolas,monospace; padding:8px 14px; background:#263238; color:#B2FF59; border-radius:6px; overflow:hidden; white-space:pre; line-height:1.3;">library(dlnm); library(mgcv); library(splines)
+cb <- crossbasis(pm25, lag=7, argvar=list(fun="ns",df=3), arglag=list(fun="ns",df=3))
+model <- glm(death ~ cb + ns(time,6*4) + ns(temp,3) + ns(humidity,3) + as.factor(dow), family=quasipoisson, data=df)
+pred <- crosspred(cb, model, at=pm25_seq, cen=median(pm25))</div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第7页：案例数据概况 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top orange"></div>
+  <div class="slide-title">案例数据概况 · 马鞍山市 2020—2023</div>
+  <div class="slide-num">7 / 15</div>
+
+  <div class="row" style="position:absolute; top:100px; left:60px; right:60px; gap:30px;">
+    <!-- 左：简述 -->
+    <div class="col" style="flex:0 0 320px;">
+      <div class="card blue" style="font-size:16px; margin-bottom:16px; line-height:1.6;">
+        <b>马鞍山市</b><br>
+        2020—2023 年逐日数据<br>
+        <span class="tag blue">n = 1,462 天</span><br><br>
+        评估 <b>PM2.5 / PM10</b><br>
+        对 CVD 死亡的影响
+      </div>
+      <div style="font-size:13px; line-height:1.8; color:#555;">
+        <b>关键预处理决策：</b><br>
+        • PM2.5 与 PM10 强相关<br>
+        　(rs=0.845) → <b>分开建模</b><br>
+        • 气象因素 df=3<br>
+        • 时间趋势 df=6/年<br>
+        • 全部参数由 AIC 确定
+      </div>
+      <div style="margin-top:16px; font-size:12px; color:#bbb; opacity:0.45; line-height:1.6; border-top:1px dashed #ddd; padding-top:10px;">
+        数据整合自三个独立系统：<br>
+        CDC 死因登记 ＋ 生态环境局监测 ＋ 气象局观测
+      </div>
+    </div>
+    <!-- 右：数据表 -->
+    <div class="col" style="font-size:13px;">
+      <table>
+        <tr><th style="width:28%">数据维度</th><th style="width:32%">变量</th><th>描述</th></tr>
+        <tr><td rowspan="2" style="vertical-align:middle;font-weight:700;">暴露</td><td>PM2.5 日均</td><td><span class="tag blue">M=29</span> (P25=20, P75=43) μg/m³</td></tr>
+        <tr><td>PM10 日均</td><td><span class="tag orange">M=52</span> (P25=36, P75=72) μg/m³</td></tr>
+        <tr><td style="font-weight:700;">结局</td><td>CVD 日死亡数</td><td>总计 <b>20,386</b> 例，日 M=13 (10,16)</td></tr>
+        <tr><td style="font-weight:700;">混杂</td><td>气象因素</td><td>日均温度/气压/湿度/风速</td></tr>
+        <tr><td style="font-weight:700;">混杂</td><td>其他污染物</td><td>NO2, SO2, CO, O3-8h</td></tr>
+        <tr><td rowspan="2" style="vertical-align:middle;font-weight:700;">分层</td><td>性别</td><td>男 48.7% / 女 51.3%</td></tr>
+        <tr><td>年龄</td><td><b>≥65岁占 90.6%</b>（<65岁仅 9.4%）</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第8页：模型构建实操 —— AIC优化 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">模型构建实操 —— 参数选择与 AIC 优化</div>
+  <div class="slide-num">8 / 15</div>
+
+  <div class="row" style="position:absolute; top:100px; left:40px; right:40px; bottom:60px; gap:20px;">
+    <!-- 左：AIC图 -->
+    <div class="col" style="flex:0 0 55%;">
+      <img class="fig" src="ppt_figures/fig1_aic_comparison.png" alt="AIC比较">
+    </div>
+    <!-- 右：文字 -->
+    <div class="col" style="display:flex; flex-direction:column; gap:16px; font-size:14px; line-height:1.7;">
+      <div class="card">
+        <b style="font-size:16px;">df 选择的权衡</b><br><br>
+        <span class="tag red">df 太小</span> → 欠拟合，残留季节趋势<br>
+        <span class="tag orange">df 太大</span> → 过拟合，吃掉暴露信号<br>
+        <span class="tag green">AIC 最小</span> → 平衡拟合与复杂度
+      </div>
+      <div class="card blue">
+        <b style="font-size:16px;">滞后结构确定</b><br><br>
+        • 暴露-反应维 df=3<br>
+        　允许适度非线性弯曲<br>
+        • 滞后维 df=3, lag 0~7d<br>
+        　覆盖即时到一周窗口<br>
+        • 评估 <b>单日滞后</b>（lag0~7）<br>
+        　和 <b>累积滞后</b>（lag01~07）
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第9页：敏感性分析 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">模型诊断与敏感性分析 —— 如何验证稳健性</div>
+  <div class="slide-num">9 / 15</div>
+
+  <div style="position:absolute; top:90px; left:60px; right:60px;">
+    <div class="card blue" style="text-align:center;font-size:18px;font-weight:700;margin-bottom:16px;">
+      核心问题：换一种参数设定，结论会不会变？
+    </div>
+  </div>
+
+  <div class="row" style="position:absolute; top:190px; left:60px; right:60px; gap:16px;">
+    <div class="col card" style="text-align:center;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:8px;">策略一：多污染物模型</div>
+      <div style="font-size:13px;color:#555;">逐步加入 NO2 / SO2 / CO / O3-8h</div>
+      <div style="margin-top:8px;" class="tag blue">"控制更多混杂，效应还在吗？"</div>
+    </div>
+    <div class="col card orange" style="text-align:center;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:8px;">策略二：自由度扰动</div>
+      <div style="font-size:13px;color:#555;">时间 df: 4→5→6<br>气象 df: 3→4→5</div>
+      <div style="margin-top:8px;" class="tag orange">"换平滑度，结论稳定吗？"</div>
+    </div>
+  </div>
+
+  <!-- 敏感性图 -->
+  <div style="position:absolute; top:340px; left:40px; right:40px; bottom:80px;">
+    <img class="fig" src="ppt_figures/fig5_sensitivity.png" alt="敏感性分析">
+  </div>
+
+  <div style="position:absolute; bottom:30px; left:60px; right:60px;">
+    <div class="card red" style="text-align:center;font-size:15px;font-weight:700;">
+      所有变体均保持统计学意义，效应方向一致 → 模型稳健 ✓
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第10页：效应解读（核心结果页） -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">效应解读 —— RR 值 · 滞后效应 · 暴露-反应曲线</div>
+  <div class="slide-num">10 / 15</div>
+
+  <div class="row" style="position:absolute; top:90px; left:20px; right:20px; bottom:20px; gap:10px;">
+    <!-- 左栏：RR + 对比 -->
+    <div class="col" style="flex:0 0 28%; display:flex; flex-direction:column; gap:12px;">
+      <div class="card blue" style="text-align:center;">
+        <div style="font-size:13px;margin-bottom:6px;">RR 公式</div>
+        <code style="font-size:18px;font-weight:900;">RR = exp(β × 10) = 1.035</code>
+        <div style="margin-top:6px;font-size:13px;">PM2.5 每升 10μg/m³<br>CVD 死亡风险增加 <b style="color:var(--red);font-size:18px;">3.5%</b></div>
+      </div>
+      <table style="font-size:12px;">
+        <tr><th></th><th>峰值滞后</th><th>RR</th><th>特点</th></tr>
+        <tr><td class="hl">PM2.5</td><td class="hl">lag02</td><td class="hl">1.035</td><td class="hl">效应强、快</td></tr>
+        <tr><td class="ohl">PM10</td><td class="ohl">lag07</td><td class="ohl">1.018</td><td class="ohl">效应弱、缓</td></tr>
+      </table>
+      <div class="card" style="text-align:center;font-size:13px;line-height:1.6;">
+        <b>95%CI 解读：</b><br>
+        PM2.5 lag02 的 95%CI<br>
+        (1.023, 1.046) <b>不跨越 1.0</b><br>
+        → 统计显著
+      </div>
+    </div>
+
+    <!-- 中栏：滞后效应图 -->
+    <div class="col" style="display:flex; flex-direction:column;">
+      <div style="font-size:13px;font-weight:700;text-align:center;margin-bottom:4px;color:var(--blue);">PM2.5 累积滞后效应</div>
+      <div style="flex:1;"><img class="fig" src="ppt_figures/fig2_lag_effects.png" alt="滞后效应"></div>
+    </div>
+
+    <!-- 右栏：暴露反应曲线 -->
+    <div class="col" style="display:flex; flex-direction:column;">
+      <div style="font-size:13px;font-weight:700;text-align:center;margin-bottom:4px;color:var(--blue);">暴露-反应曲线</div>
+      <div style="flex:1;"><img class="fig" src="ppt_figures/fig3_exposure_response.png" alt="暴露反应曲线"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第11页：分层分析 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">分层分析 —— 如何识别效应修饰因子</div>
+  <div class="slide-num">11 / 15</div>
+
+  <div style="position:absolute; top:90px; left:60px; right:60px;">
+    <div class="card blue" style="font-size:14px;text-align:center;margin-bottom:12px;">
+      <b>方法逻辑：</b>同一 DLNM 模型，在不同亚组中分别运行，比较 RR 差异 → 识别易感亚群
+    </div>
+    <div class="row" style="gap:12px;margin-bottom:12px;">
+      <div class="col card" style="text-align:center;font-size:13px;"><b>性别</b>：男 / 女<br><span style="color:#888;">检验生物易感性差异</span></div>
+      <div class="col card" style="text-align:center;font-size:13px;"><b>年龄</b>：&lt;65 / ≥65岁<br><span style="color:#888;">识别高危人群</span></div>
+      <div class="col card" style="text-align:center;font-size:13px;"><b>时期</b>：紧急 / 常态 / 恢复<br><span style="color:#888;">控制COVID阶段混杂</span></div>
+    </div>
+  </div>
+
+  <!-- 森林图 -->
+  <div style="position:absolute; top:270px; left:20px; right:20px; bottom:60px;">
+    <img class="fig" src="ppt_figures/fig4_forest_plot.png" alt="分层分析森林图">
+  </div>
+
+  <div style="position:absolute; bottom:18px; left:60px; right:60px;">
+    <div class="card red" style="font-size:13px;text-align:center;">
+      <b>≥65岁</b> 为明确易感人群 &nbsp;｜&nbsp; <b>&lt;65岁</b> 无统计意义 → 样本量不足(9.4%) ≠ 没有效应
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第12页：从统计结果到生物学解释 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">从统计结果到生物学解释</div>
+  <div class="slide-num">12 / 15</div>
+
+  <div class="row" style="position:absolute; top:100px; left:40px; right:40px; bottom:40px; gap:20px;">
+    <!-- 左：机制图 -->
+    <div class="col" style="flex:0 0 55%;">
+      <div style="font-size:13px;font-weight:700;text-align:center;margin-bottom:6px;color:var(--red);">生物学机制路径</div>
+      <img class="fig" src="ppt_figures/fig8_biological_mechanism.png" alt="生物学机制" style="height:85%;">
+    </div>
+    <!-- 右：统计↔生物 对照 -->
+    <div class="col" style="display:flex;flex-direction:column;gap:14px;font-size:13px;line-height:1.7;">
+      <div class="card">
+        <b style="font-size:15px;">RR=1.035 的双重含义</b>
+        <table style="margin-top:8px;font-size:12px;">
+          <tr><th style="background:var(--grey)">统计意义</th><th style="background:var(--grey)">生物学意义</th></tr>
+          <tr><td>95%CI 不跨越 1.0<br>效应真实存在</td><td>颗粒物通过氧化应激<br>+ 炎症通路致病</td></tr>
+        </table>
+      </div>
+      <div class="card orange">
+        <b style="font-size:15px;">滞后时间的生物学对应</b>
+        <table style="margin-top:8px;font-size:12px;">
+          <tr><th style="background:var(--orange)">滞后特征</th><th style="background:var(--orange)">生物学解释</th></tr>
+          <tr><td>PM2.5: lag 0-2d 达峰</td><td>急性触发——斑块破裂后<br>48-72h 内心梗发生</td></tr>
+          <tr><td>PM10: lag 0-7d 达峰</td><td>慢性累积——持续炎症<br>反应产生效应</td></tr>
+        </table>
+      </div>
+      <div class="card blue" style="text-align:center;font-weight:700;font-size:14px;">
+        DLNM 滞后结构 ⇔ 病理生理机制时间线 相互印证
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第13页：DLNM 优势、适用条件与局限 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">DLNM 的优势、适用条件与局限性</div>
+  <div class="slide-num">13 / 15</div>
+
+  <div class="row" style="position:absolute; top:100px; left:40px; right:40px; bottom:40px; gap:20px;">
+
+    <!-- 优势 -->
+    <div class="col card" style="background:#E8F5E9; border-top:4px solid #2E7D32;">
+      <div style="font-size:16px;font-weight:700;color:#2E7D32;margin-bottom:12px;">✓ 优势</div>
+      <table style="font-size:12px;">
+        <tr><td style="border:none;padding:6px 8px;">同时处理非线性+滞后</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">一个交叉基替代多项</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">结果可视化丰富</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">三维效应面/曲线图</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">基函数灵活：ns/bs/poly</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">df 可调</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">减少多重比较</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">一次拟合全部滞后天数</td></tr>
+      </table>
+    </div>
+
+    <!-- 适用条件 -->
+    <div class="col card" style="background:var(--blue-bg); border-top:4px solid var(--blue);">
+      <div style="font-size:16px;font-weight:700;color:var(--blue);margin-bottom:12px;">⚙ 适用条件</div>
+      <table style="font-size:12px;">
+        <tr><td style="border:none;padding:6px 8px;">时间序列数据（等间隔）</td><td style="border:none;text-align:right;color:#2E7D32;">✓ 逐日</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">暴露与结局存在时滞</td><td style="border:none;text-align:right;color:#2E7D32;">✓</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">暴露-反应可能非线性</td><td style="border:none;text-align:right;color:#2E7D32;">✓</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">结局为计数数据</td><td style="border:none;text-align:right;color:#2E7D32;">✓ 死亡数</td></tr>
+        <tr><td style="border:none;padding:6px 8px;">足够样本量</td><td style="border:none;text-align:right;color:#2E7D32;">✓ n=1,462</td></tr>
+      </table>
+    </div>
+
+    <!-- 局限 -->
+    <div class="col card" style="background:#FFF3E0; border-top:4px solid var(--orange);">
+      <div style="font-size:16px;font-weight:700;color:var(--orange);margin-bottom:12px;">⚠ 局限性</div>
+      <table style="font-size:12px;">
+        <tr><td style="border:none;padding:6px 8px;"><b>对df/节点敏感</b></td></tr>
+        <tr><td style="border:none;padding:6px 8px;color:#888;">→ AIC+敏感性分析</td></tr>
+        <tr><td style="border:none;padding:6px 8px;"><b>生态学设计</b></td></tr>
+        <tr><td style="border:none;padding:6px 8px;color:#888;">→ 不能推断个体因果</td></tr>
+        <tr><td style="border:none;padding:6px 8px;"><b>暴露测量误差</b></td></tr>
+        <tr><td style="border:none;padding:6px 8px;color:#888;">→ 区域均值 ≠ 个体暴露</td></tr>
+        <tr><td style="border:none;padding:6px 8px;"><b>需足够样本量</b></td></tr>
+        <tr><td style="border:none;padding:6px 8px;color:#888;">→ 本案例 1,462 天</td></tr>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- 半透明提示 -->
+  <div style="position:absolute; bottom:30px; left:60px; right:60px; text-align:center; font-size:14px; color:#bbb; opacity:0.30; letter-spacing:2px;">
+    模型选择原则：AIC 最小化  →  敏感性分析验证  →  确保结论可信
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第14页：方法学总结 -->
+<!-- ================================================================ -->
+<div class="slide">
+  <div class="bar-top"></div>
+  <div class="slide-title">方法学总结 —— 应用拓展与课程关联</div>
+  <div class="slide-num">14 / 15</div>
+
+  <!-- 应用场景 -->
+  <div style="position:absolute; top:90px; left:60px; right:60px;">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;">DLNM 在环境流行病学中的应用</div>
+    <div class="row" style="gap:12px;">
+      <div class="col card blue" style="text-align:center;font-size:13px;">🌫️ 空气污染 → 死亡/入院</div>
+      <div class="col card orange" style="text-align:center;font-size:13px;">🌡️ 极端温度 → 死亡风险</div>
+      <div class="col card" style="text-align:center;font-size:13px;background:#E8F5E9;">🌸 花粉 → 哮喘发作</div>
+      <div class="col card" style="text-align:center;font-size:13px;background:#E3F2FD;">🌧️ 降水 → 水源性疾病</div>
+    </div>
+  </div>
+
+  <div style="position:absolute; top:190px; left:60px; right:60px; text-align:center; font-size:14px; color:#888; margin-bottom:8px;">
+    从数据到结论的完整路径，涉及课程中的多个核心知识点 ↓
+  </div>
+
+  <!-- 课程关联表 -->
+  <div style="position:absolute; top:230px; left:60px; right:60px; font-size:13px;">
+    <table>
+      <tr><th style="width:22%">课程知识点</th><th style="width:35%">在本研究中的体现</th><th>具体操作</th></tr>
+      <tr><td>时间序列分析</td><td>1,462天逐日数据建模</td><td>每日一个观测点，连续4年</td></tr>
+      <tr><td>广义线性模型(GLM)</td><td>Quasi-Poisson处理过度离散</td><td><code>family=quasipoisson</code></td></tr>
+      <tr><td>广义相加模型(GAM)</td><td>ns()灵活拟合非线性趋势</td><td><code>ns(time, 6*4)</code></td></tr>
+      <tr><td>模型选择(AIC)</td><td>遍历df组合，选AIC最小</td><td>AIC = 10,753 最优</td></tr>
+      <tr><td>混杂控制</td><td>三层控制：时间+气象+DOW</td><td>严格排除共线性变量</td></tr>
+      <tr><td>敏感性分析</td><td>多污染物+多df验证</td><td>效应估计未显著变化</td></tr>
+      <tr><td>效应修饰</td><td>性别/年龄/时期分层</td><td>≥65岁 RR=1.037 vs <65岁 NS</td></tr>
+    </table>
+  </div>
+
+  <!-- 底部总结 -->
+  <div style="position:absolute; bottom:60px; left:60px; right:60px;">
+    <div class="box highlight" style="font-size:15px; line-height:1.6;">
+      DLNM = 环境健康时间序列分析的标准工具<br>
+      核心：<u>交叉基函数</u> ｜ 关键：<u>AIC参数选择 + 敏感性验证</u><br>
+      本案例完整展示了从数据到结论的全流程
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 第15页：参考文献 / 致谢 -->
+<!-- ================================================================ -->
+<div class="slide end">
+  <div style="position:absolute; top:80px; left:80px; right:80px;">
+    <div style="font-size:14px; opacity:0.7; line-height:2;">
+      <b style="font-size:18px;">核心参考文献</b><br>
+      1. Gasparrini A. Distributed lag linear and non-linear models in R: the package dlnm. <i>J Stat Softw</i>, 2011.<br>
+      2. Gasparrini A, Armstrong B, Kenward MG. Distributed lag non-linear models. <i>Stat Med</i>, 2010.<br>
+      3. 吕英等. 2020—2023年马鞍山市大气颗粒物对居民心脑血管疾病死亡影响的时间序列分析. <i>环境卫生学杂志</i>, 2026.<br>
+      4. 更多参考文献见论文原文（共21条）
+    </div>
+  </div>
+
+  <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; width:80%;">
+    <div style="font-size:20px; opacity:0.35; font-weight:400; margin-bottom:30px; letter-spacing:4px;">
+      分布滞后非线性模型  ·  DLNM  ·  时间序列分析
+    </div>
+    <h1 style="font-size:48px; font-weight:900;">感谢各位听取！</h1>
+    <h2 style="font-size:22px; margin-top:20px; font-weight:400;">欢迎提问与讨论</h2>
+  </div>
+
+  <div style="position:absolute; bottom:30px; left:80px; right:80px; font-size:11px; opacity:0.4;">
+    图表由 Python (matplotlib) 从论文报告结果重建 · 代码：generate_ppt_figures.py · 图片：ppt_figures/
+  </div>
+</div>
+
+</body>
+</html>
