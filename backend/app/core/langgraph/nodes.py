@@ -121,7 +121,7 @@ async def html_generate_node(state: PPTState) -> dict:
         ]
 
         logger.info("[html_gen] 调用LLM, prompt长度=%d", len(user_prompt))
-        html_content = await llm_service.call(messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=16384)
+        html_content = await llm_service.call(messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=settings.LLM_HTML_MAX_TOKENS)
         logger.info("[html_gen] LLM返回原始长度=%d", len(html_content) if html_content else 0)
 
         if not html_content:

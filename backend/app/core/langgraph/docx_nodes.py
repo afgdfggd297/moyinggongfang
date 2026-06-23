@@ -113,7 +113,7 @@ async def docx_content_node(state: DocxState) -> dict:
         ]
 
         logger.info("[docx_content] 调用LLM, prompt长度=%d", len(user_prompt))
-        markdown_content = await llm_service.call(messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=16384)
+        markdown_content = await llm_service.call(messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=settings.LLM_HTML_MAX_TOKENS)
         logger.info("[docx_content] LLM返回原始长度=%d", len(markdown_content) if markdown_content else 0)
 
         if not markdown_content:

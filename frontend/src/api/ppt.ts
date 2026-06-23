@@ -1,5 +1,6 @@
 /** PPT API 服务 - 支持流式输出 */
 import api from './index'
+import { API_TIMEOUT_LONG, API_TIMEOUT_STREAM } from '../config'
 import type {
   PlanRequest,
   PlanResponse,
@@ -12,7 +13,7 @@ import type {
 
 /** 创建方案 */
 export async function createPlan(req: PlanRequest): Promise<PlanResponse> {
-  const { data } = await api.post<PlanResponse>('/ppt/plan', req, { timeout: 180000 })
+  const { data } = await api.post<PlanResponse>('/ppt/plan', req, { timeout: API_TIMEOUT_LONG })
   return data
 }
 
@@ -24,7 +25,7 @@ export async function updatePlan(planId: string, updates: { title?: string; outl
 
 /** 确认方案并生成HTML（非流式） */
 export async function confirmPlan(req: ConfirmPlanRequest): Promise<GenerateResponse> {
-  const { data } = await api.post<GenerateResponse>('/ppt/confirm-plan', req, { timeout: 180000 })
+  const { data } = await api.post<GenerateResponse>('/ppt/confirm-plan', req, { timeout: API_TIMEOUT_LONG })
   return data
 }
 
@@ -105,7 +106,7 @@ export async function editHtml(req: EditRequest): Promise<GenerateResponse> {
 
 /** 导出PPTX */
 export async function exportPptx(req: ExportRequest): Promise<PPTResponse> {
-  const { data } = await api.post<PPTResponse>('/ppt/export', req, { timeout: 180000 })
+  const { data } = await api.post<PPTResponse>('/ppt/export', req, { timeout: API_TIMEOUT_LONG })
   return data
 }
 
@@ -134,7 +135,7 @@ export async function regenerateSlide(
 ): Promise<{ plan_id: string; html_content: string; slide_index: number }> {
   const { data } = await api.post('/ppt/regenerate-slide', null, {
     params: { plan_id: planId, slide_index: slideIndex, user_instruction: userInstruction },
-    timeout: 120000,
+    timeout: API_TIMEOUT_STREAM,
   })
   return data
 }

@@ -1,5 +1,6 @@
 /** DOCX API 服务 */
 import api from './index'
+import { API_TIMEOUT_LONG, API_TIMEOUT_STREAM } from '../config'
 
 /** 文档方案请求 */
 export interface DocxPlanRequest {
@@ -77,13 +78,13 @@ export interface DocxStreamCallbacks {
 
 /** 创建文档方案 */
 export async function createDocxPlan(req: DocxPlanRequest): Promise<DocxPlanResponse> {
-  const { data } = await api.post<DocxPlanResponse>('/docx/plan', req, { timeout: 180000 })
+  const { data } = await api.post<DocxPlanResponse>('/docx/plan', req, { timeout: API_TIMEOUT_LONG })
   return data
 }
 
 /** 确认方案并生成内容（非流式） */
 export async function confirmDocxPlan(req: DocxConfirmRequest): Promise<DocxGenerateResponse> {
-  const { data } = await api.post<DocxGenerateResponse>('/docx/confirm', req, { timeout: 180000 })
+  const { data } = await api.post<DocxGenerateResponse>('/docx/confirm', req, { timeout: API_TIMEOUT_LONG })
   return data
 }
 
@@ -156,7 +157,7 @@ export async function editDocxHtml(req: DocxEditRequest): Promise<DocxGenerateRe
 
 /** 导出DOCX */
 export async function exportDocx(req: DocxExportRequest): Promise<DocxResponse> {
-  const { data } = await api.post<DocxResponse>('/docx/export', req, { timeout: 180000 })
+  const { data } = await api.post<DocxResponse>('/docx/export', req, { timeout: API_TIMEOUT_LONG })
   return data
 }
 
@@ -165,8 +166,8 @@ export function getDocxDownloadUrl(planId: string): string {
   return `/api/v1/docx/download/${planId}`
 }
 
-/** 获取HTML内容 */
-export async function getDocxHtml(planId: string): Promise<{ plan_id: string; markdown_content: string }> {
+/** 获取HTML预览内容（Markdown → HTML） */
+export async function getDocxHtml(planId: string): Promise<{ plan_id: string; html_content: string }> {
   const { data } = await api.get(`/docx/html/${planId}`)
   return data
 }

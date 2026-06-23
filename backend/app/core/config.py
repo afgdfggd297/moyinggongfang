@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     LLM_HTML_TEMPERATURE: float = 0.9     # HTML 生成
     LLM_STREAM_TEMPERATURE: float = 0.9   # 流式输出
 
+    # ═══ LLM 生成 ═══
+    LLM_MAX_TOKENS: int = 16384           # 最大输出 token 数
+    LLM_HTML_MAX_TOKENS: int = 16384      # HTML/Markdown 生成最大 token
+
+    # ═══ DOCX 导出 ═══
+    DOCX_TARGET_LENGTH: int = 5000         # 预估目标内容长度（字符）
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

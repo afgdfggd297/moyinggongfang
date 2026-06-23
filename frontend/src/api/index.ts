@@ -1,9 +1,10 @@
 /** 公共 API 客户端 */
 import axios from 'axios'
+import { API_TIMEOUT } from '../config'
 
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 30000,
+  timeout: API_TIMEOUT,
   headers: { 'Content-Type': 'application/json' },
 })
 
