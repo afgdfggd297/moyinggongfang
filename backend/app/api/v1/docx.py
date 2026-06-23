@@ -267,16 +267,16 @@ async def confirm_docx_plan_stream(
     async def event_stream():
         full_content = ""
         try:
-            yield json.dumps({"type": "start", "message": "开始生成文档内容..."}, ensure_ascii=False) + "\n"
+            yield f"data: {json.dumps({'type': 'start', 'message': '开始生成文档内容...'}, ensure_ascii=False)}\n\n"
 
             async for chunk in llm_service.call_stream(messages, temperature=settings.LLM_STREAM_TEMPERATURE):
                 full_content += chunk
-                yield json.dumps({"type": "chunk", "content": chunk}, ensure_ascii=False) + "\n"
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
             # 清理
             markdown_content = full_content.strip()
-            if markdown_content.startswith("```html"):
-                markdown_content = markdown_content[7:]
+            if markdown_content.startswith("```markdown"):
+                markdown_content = markdown_content[11:]
             if markdown_content.startswith("```"):
                 markdown_content = markdown_content[3:]
             if markdown_content.endswith("```"):
@@ -295,15 +295,11 @@ async def confirm_docx_plan_stream(
                 confirmed_style=req.style,
             ))
 
-            yield json.dumps({
-                "type": "done",
-                "markdown_content": markdown_content,
-                "title": stored["title"],
-            }, ensure_ascii=False) + "\n"
+            yield f"data: {json.dumps({'type': 'done', 'markdown_content': markdown_content, 'title': stored['title']}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             logger.error("[docx_stream] 失败: %s", str(e))
-            yield json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False) + "\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),

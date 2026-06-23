@@ -71,7 +71,7 @@ export interface DocxResponse {
 export interface DocxStreamCallbacks {
   onStart?: (message: string) => void
   onChunk?: (content: string, fullContent: string) => void
-  onDone?: (htmlContent: string, title: string) => void
+  onDone?: (markdownContent: string, title: string) => void
   onError?: (message: string) => void
 }
 
