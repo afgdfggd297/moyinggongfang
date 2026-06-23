@@ -1448,17 +1448,27 @@ async function saveEdit() {
 
 /* 深色模式 - 模拟 Word 深色模式效果 */
 [data-theme="dark"] .preview-container {
-  background: #2a2a2a;
+  background: #1e1e1e;
 }
-[data-theme="dark"] .preview-container::-webkit-scrollbar-track {
-  background: #3a3a3a;
+[data-theme="dark"] .preview-content {
+  background: #2d2d2d;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
-[data-theme="dark"] .preview-container::-webkit-scrollbar-thumb {
-  background: #555;
-}
-[data-theme="dark"] .preview-container::-webkit-scrollbar-thumb:hover {
-  background: #666;
-}
+[data-theme="dark"] .markdown-body h1 { color: #e0e0e0; border-bottom-color: #e8a849; }
+[data-theme="dark"] .markdown-body h2 { color: #d0d0d0; }
+[data-theme="dark"] .markdown-body h3 { color: #c0c0c0; }
+[data-theme="dark"] .markdown-body p { color: #b0b0b0; }
+[data-theme="dark"] .markdown-body li { color: #b0b0b0; }
+[data-theme="dark"] .markdown-body strong { color: #e0e0e0; }
+[data-theme="dark"] .markdown-body table { border-color: #444; }
+[data-theme="dark"] .markdown-body th { background: #3a3a3a; color: #d0d0d0; border-color: #555; }
+[data-theme="dark"] .markdown-body td { border-color: #555; }
+[data-theme="dark"] .markdown-body tr:nth-child(even) { background: #353535; }
+[data-theme="dark"] .markdown-body blockquote { color: #909090; border-left-color: #e8a849; }
+[data-theme="dark"] .markdown-body hr { border-top-color: #444; }
+[data-theme="dark"] .preview-container::-webkit-scrollbar-track { background: #2a2a2a; }
+[data-theme="dark"] .preview-container::-webkit-scrollbar-thumb { background: #555; }
+[data-theme="dark"] .preview-container::-webkit-scrollbar-thumb:hover { background: #666; }
 
 /* 保存栏 */
 .save-strip {
