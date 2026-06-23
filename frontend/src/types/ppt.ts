@@ -84,3 +84,42 @@ export type StyleType = 'business' | 'academic' | 'creative' | 'minimal'
 
 /** 配色类型 */
 export type ColorType = 'blue' | 'green' | 'red' | 'purple' | 'dark' | 'custom'
+
+/** ═══ 用户认证 ═══ */
+
+/** 用户信息 */
+export interface User {
+  id: string
+  username: string
+  email: string
+  avatar_url?: string
+  created_at?: string
+  is_active?: boolean
+}
+
+/** Token 响应 */
+export interface TokenResponse {
+  access_token: string
+  token_type: string
+  user: User
+}
+
+/** 登录请求 */
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+/** 注册请求 */
+export interface RegisterRequest {
+  username: string
+  email: string
+  password: string
+}
+
+/** 更新用户请求 */
+export interface UpdateUserRequest {
+  username?: string
+  email?: string
+  avatar_url?: string
+}
