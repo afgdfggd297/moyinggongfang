@@ -71,8 +71,6 @@ function loadFromHistory(planId: string) {
 }
 
 // 预览
-const iframeRef = ref<HTMLIFrameElement | null>(null)
-const previewScale = ref(0.7)
 const editMode = ref(false)
 
 // 简单的 Markdown 转 HTML 函数
@@ -94,9 +92,8 @@ function markdownToHtml(md: string): string {
   html = html.replace(/^\|(.+)\|$/gim, (match) => {
     const cells = match.split('|').filter(c => c.trim())
     if (cells.some(c => c.trim().match(/^[-:]+$/))) {
-      return '' // 跳过分隔行
+      return ''
     }
-    const isHeader = match.includes('---')
     const tag = 'td'
     const row = cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('')
     return `<tr>${row}</tr>`
@@ -116,7 +113,7 @@ function markdownToHtml(md: string): string {
   // 分隔线
   html = html.replace(/^[-*_]{3,}$/gim, '<hr>')
 
-  // 段落（处理剩余的文本行）
+  // 段落
   html = html.replace(/^(?!<[a-z]|$)(.*$)/gim, '<p>$1</p>')
 
   // 清理空行
@@ -125,80 +122,16 @@ function markdownToHtml(md: string): string {
   return html
 }
 
-function renderPreview() {
-  if (!iframeRef.value || !store.markdownContent) return
-  const doc = iframeRef.value.contentDocument || iframeRef.value.contentWindow?.document
-  if (!doc) return
-
-  const htmlContent = markdownToHtml(store.markdownContent)
-
-  const fullHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body {
-      font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-      line-height: 1.8;
-      color: #333;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 40px;
-    }
-    h1 { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 24px; border-bottom: 2px solid #e8a849; padding-bottom: 12px; }
-    h2 { font-size: 22px; font-weight: 600; color: #2c3e50; margin-top: 32px; margin-bottom: 16px; }
-    h3 { font-size: 18px; font-weight: 600; color: #34495e; margin-top: 24px; margin-bottom: 12px; }
-    p { margin-bottom: 12px; }
-    ul, ol { margin-bottom: 12px; padding-left: 24px; }
-    li { margin-bottom: 6px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; }
-    th { background: #f5f5f5; font-weight: 600; }
-    tr:nth-child(even) { background: #fafafa; }
-    blockquote { border-left: 4px solid #e8a849; padding-left: 16px; margin-left: 0; color: #666; font-style: italic; margin-bottom: 12px; }
-    hr { border: none; border-top: 1px solid #ddd; margin: 32px 0; }
-  </style>
-</head>
-<body>
-${htmlContent}
-</body>
-</html>`
-
-  doc.open()
-  doc.write(fullHtml)
-  doc.close()
-}
+const renderedHtml = computed(() => markdownToHtml(store.markdownContent))
 
 function toggleEditMode() {
   editMode.value = !editMode.value
-  const doc = iframeRef.value?.contentDocument || iframeRef.value?.contentWindow?.document
-  if (!doc) return
-
-  const body = doc.body
-  if (editMode.value) {
-    body.contentEditable = 'true'
-    body.style.cursor = 'text'
-  } else {
-    body.contentEditable = 'false'
-    body.style.cursor = ''
-  }
 }
 
 async function saveEdit() {
-  // Markdown 编辑模式下，直接保存当前内容
   await store.saveEdit()
   editMode.value = false
 }
-
-watch(() => store.markdownContent, () => {
-  nextTick(renderPreview)
-})
-
-onMounted(() => {
-  if (store.markdownContent) {
-    nextTick(renderPreview)
-  }
-})
 </script>
 
 <template>
@@ -485,7 +418,7 @@ onMounted(() => {
               </div>
 
               <div class="preview-container">
-                <iframe ref="iframeRef" class="preview-frame" :style="{ transform: `scale(${previewScale})` }" />
+                <div class="preview-content markdown-body" v-html="renderedHtml"></div>
               </div>
 
               <Transition name="slide-up">
@@ -1354,14 +1287,112 @@ onMounted(() => {
   overflow: hidden;
   margin-bottom: 24px;
   background: white;
+  max-height: 600px;
+  overflow-y: auto;
 }
 
-.preview-frame {
-  width: 800px;
-  height: 600px;
-  border: none;
-  transform-origin: top left;
+.preview-content {
+  padding: 32px 40px;
+  min-height: 400px;
 }
+
+/* Markdown 样式 */
+.markdown-body h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e8a849;
+}
+
+.markdown-body h2 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-top: 32px;
+  margin-bottom: 16px;
+}
+
+.markdown-body h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #34495e;
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+.markdown-body p {
+  font-size: 15px;
+  line-height: 1.8;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin-bottom: 12px;
+  padding-left: 24px;
+}
+
+.markdown-body li {
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid #ddd;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.markdown-body th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.markdown-body tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid #e8a849;
+  padding-left: 16px;
+  margin-left: 0;
+  color: #666;
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 32px 0;
+}
+
+.markdown-body strong {
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.markdown-body em {
+  font-style: italic;
+}
+
+/* 预览滚动条 */
+.preview-container::-webkit-scrollbar { width: 8px; }
+.preview-container::-webkit-scrollbar-track { background: #f5f5f5; }
+.preview-container::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+.preview-container::-webkit-scrollbar-thumb:hover { background: #bbb; }
 
 /* 保存栏 */
 .save-strip {
@@ -1521,7 +1552,7 @@ onMounted(() => {
 [data-theme="light"] .style-card:hover { border-color: rgba(0,0,0,0.1); background: #E8E4DD; }
 [data-theme="light"] .source-item { background: #F0ECE5; }
 [data-theme="light"] .source-item:hover { background: #E8E4DD; }
-[data-theme="light"] .preview-container { border-color: rgba(0,0,0,0.06); }
+[data-theme="light"] .preview-container { border-color: rgba(0,0,0,0.06); background: #ffffff; }
 [data-theme="light"] .rail-arrow { color: rgba(0,0,0,0.1); }
 [data-theme="light"] .rail-dot { background: #F0ECE5; border-color: rgba(0,0,0,0.08); }
 [data-theme="light"] .history-sidebar {
