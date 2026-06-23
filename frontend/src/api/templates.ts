@@ -1,39 +1,5 @@
 /** Templates API 服务 */
-import axios from 'axios'
-
-const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
-})
-
-// 请求拦截 — 自动注入 token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    console.log(`[Templates API] ${config.method?.toUpperCase()} ${config.url}`)
-    return config
-  },
-  (error) => {
-    console.error('[Templates API] 请求错误:', error)
-    return Promise.reject(error)
-  }
-)
-
-// 响应拦截
-api.interceptors.response.use(
-  (response) => {
-    console.log(`[Templates API] 响应 ${response.status}`)
-    return response
-  },
-  (error) => {
-    console.error('[Templates API] 响应错误:', error.response?.data || error.message)
-    return Promise.reject(error)
-  }
-)
+import api from './index'
 
 /** 模板分类 */
 export type TemplateCategory = 'all' | 'business' | 'academic' | 'creative' | 'minimal' | 'tech'
@@ -42,24 +8,21 @@ export type TemplateCategory = 'all' | 'business' | 'academic' | 'creative' | 'm
 export interface Template {
   id: string
   name: string
-  description: string
-  category: TemplateCategory
-  thumbnail_url: string
-  preview_url: string
-  style: string
-  color_scheme: string
-  page_count: number
-  usage_count: number
-  tags: string[]
+  description: string | null
+  category: string | null
+  style: string | null
+  color_scheme: string | null
+  thumbnail_url: string | null
+  is_system: boolean
+  created_at: string
 }
 
 /** 模板列表响应 */
 export interface TemplateListResponse {
-  items: Template[]
+  templates: Template[]
   total: number
   page: number
   page_size: number
-  total_pages: number
 }
 
 /** 获取模板列表 */

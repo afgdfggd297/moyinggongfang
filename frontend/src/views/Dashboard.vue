@@ -11,7 +11,7 @@ const { theme, toggle: toggleTheme } = useTheme()
 const authStore = useAuthStore()
 
 // State
-const stats = ref<DashboardStats>({ total_plans: 0, exported_count: 0, templates_count: 0 })
+const stats = ref<DashboardStats>({ total_plans: 0, exported_count: 0, draft_count: 0, generated_count: 0, recent_activity_count: 0 })
 const recentPlans = ref<PlanSummary[]>([])
 const allPlans = ref<PlanSummary[]>([])
 const loading = ref(true)
@@ -46,7 +46,7 @@ const filteredPlans = computed(() => {
   let plans = allPlans.value
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    plans = plans.filter(p => p.title.toLowerCase().includes(query))
+    plans = plans.filter(p => (p.title || '').toLowerCase().includes(query))
   }
   if (statusFilter.value !== 'all') {
     plans = plans.filter(p => p.status === statusFilter.value)
@@ -78,8 +78,8 @@ async function loadPlans(page: number = 1) {
   plansLoading.value = true
   try {
     const result = await dashboardApi.getPlans(page, pageSize)
-    allPlans.value = result.items
-    totalPages.value = result.total_pages
+    allPlans.value = result.plans
+    totalPages.value = Math.ceil(result.total / pageSize)
     totalPlans.value = result.total
     currentPage.value = result.page
   } catch (e) {
@@ -96,12 +96,12 @@ function goToCreate() {
 }
 
 function viewPlan(plan: PlanSummary) {
-  router.push(`/create?plan=${plan.plan_id}`)
+  router.push(`/create?plan=${plan.id}`)
 }
 
 function startRename(plan: PlanSummary) {
   renamingPlan.value = plan
-  newTitle.value = plan.title
+  newTitle.value = plan.title || ''
 }
 
 async function confirmRename() {
@@ -152,7 +152,7 @@ function cancelDelete() {
 
 async function duplicatePlan(plan: PlanSummary) {
   try {
-    const newPlan = await dashboardApi.duplicatePlan(plan.plan_id)
+    const newPlan = await dashboardApi.duplicatePlan(plan.id)
     allPlans.value.unshift(newPlan)
     stats.value.total_plans++
   } catch (e) {
@@ -264,12 +264,12 @@ onMounted(async () => {
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">◎</div>
+            <div class="stat-icon">✦</div>
             <div class="stat-content">
               <div class="stat-value" :class="{ 'stat-loading': statsLoading }">
-                {{ statsLoading ? '—' : stats.templates_count }}
+                {{ statsLoading ? '—' : stats.generated_count }}
               </div>
-              <div class="stat-label">可用模板</div>
+              <div class="stat-label">已生成</div>
             </div>
           </div>
         </section>
@@ -283,7 +283,7 @@ onMounted(async () => {
           <div class="recent-grid">
             <div
               v-for="plan in recentPlans"
-              :key="plan.plan_id"
+              :key="plan.id"
               class="recent-card"
               @click="viewPlan(plan)"
             >
@@ -293,9 +293,8 @@ onMounted(async () => {
                   {{ getStatusLabel(plan.status) }}
                 </span>
               </div>
-              <h3 class="recent-card-title">{{ plan.title }}</h3>
+              <h3 class="recent-card-title">{{ plan.title || '未命名方案' }}</h3>
               <div class="recent-card-meta">
-                <span>{{ plan.page_count }} 页</span>
                 <span>{{ formatDate(plan.updated_at) }}</span>
               </div>
             </div>
@@ -346,7 +345,7 @@ onMounted(async () => {
           <div v-else class="plans-list">
             <div
               v-for="plan in filteredPlans"
-              :key="plan.plan_id"
+              :key="plan.id"
               class="plan-item"
             >
               <div class="plan-item-main" @click="viewPlan(plan)">
@@ -354,16 +353,14 @@ onMounted(async () => {
                   <span>◈</span>
                 </div>
                 <div class="plan-item-info">
-                  <h3 class="plan-item-title">{{ plan.title }}</h3>
+                  <h3 class="plan-item-title">{{ plan.title || '未命名方案' }}</h3>
                   <div class="plan-item-meta">
                     <span :class="['plan-status', getStatusClass(plan.status)]">
                       {{ getStatusLabel(plan.status) }}
                     </span>
                     <span class="plan-meta-sep">·</span>
-                    <span>{{ plan.page_count }} 页</span>
-                    <span class="plan-meta-sep">·</span>
-                    <span>{{ plan.style }}</span>
-                    <span class="plan-meta-sep">·</span>
+                    <span v-if="plan.suggested_style">{{ plan.suggested_style }}</span>
+                    <span v-if="plan.suggested_style" class="plan-meta-sep">·</span>
                     <span>{{ formatDate(plan.updated_at) }}</span>
                   </div>
                 </div>
@@ -439,7 +436,7 @@ onMounted(async () => {
         <div class="modal-card">
           <h3 class="modal-title">确认删除</h3>
           <p class="modal-desc">
-            确定要删除方案「{{ deletingPlan.title }}」吗？此操作无法撤销。
+            确定要删除方案「{{ deletingPlan.title || '未命名方案' }}」吗？此操作无法撤销。
           </p>
           <div class="modal-actions">
             <button class="btn btn-outline" @click="cancelDelete">取消</button>

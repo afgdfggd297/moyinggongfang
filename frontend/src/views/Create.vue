@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { usePptStore } from '../stores/ppt'
+import { useAuthStore } from '../stores/auth'
 import StepInput from '../components/StepInput.vue'
 import StepPlan from '../components/StepPlan.vue'
 import StepPreview from '../components/StepPreview.vue'
@@ -10,6 +11,7 @@ import { useRouter } from 'vue-router'
 import { useTheme } from '../composables/useTheme'
 
 const store = usePptStore()
+const auth = useAuthStore()
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()
 
@@ -44,6 +46,17 @@ function isDone(key: string) { return currentIndex.value > (stepOrder[key] ?? 0)
         <button class="theme-toggle" @click="toggleTheme" :title="theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'">
           <span class="theme-icon">{{ theme === 'dark' ? '☀' : '☾' }}</span>
         </button>
+        <button class="topbar-btn" @click="router.push('/create-docx')" title="制作DOCX">
+          <span>DOCX</span>
+        </button>
+        <template v-if="auth.isAuthenticated">
+          <button class="topbar-btn" @click="router.push('/dashboard')" title="仪表盘">
+            <span class="topbar-avatar">{{ (auth.user?.username || 'U')[0].toUpperCase() }}</span>
+          </button>
+        </template>
+        <template v-else>
+          <button class="topbar-btn" @click="router.push('/login')" title="登录">登录</button>
+        </template>
       </div>
     </nav>
 
@@ -136,18 +149,34 @@ function isDone(key: string) { return currentIndex.value > (stepOrder[key] ?? 0)
 }
 .theme-toggle:hover { background: rgba(232,168,73,0.12); border-color: rgba(232,168,73,0.25); color: var(--amber); transform: rotate(30deg); }
 .theme-icon { font-size: 16px; }
+.topbar-btn {
+  height: 34px; padding: 0 14px; border-radius: 8px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-secondary); cursor: pointer; font-size: 13px;
+  font-family: 'Outfit', sans-serif;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.3s var(--ease-out);
+}
+.topbar-btn:hover { background: rgba(232,168,73,0.12); border-color: rgba(232,168,73,0.25); color: var(--amber); }
+.topbar-avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--amber), var(--amber-dim));
+  color: var(--ink-deep);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
 [data-theme="light"] .theme-toggle { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); }
 [data-theme="light"] .topbar { background: rgba(244,241,236,0.9); border-bottom-color: rgba(0,0,0,0.06); }
 [data-theme="light"] .brand-name { color: #1A1612; }
 [data-theme="light"] .brand-sub { color: #9A9488; }
 
-.app-body { flex: 1; display: flex; justify-content: center; min-height: calc(100vh - 56px); padding: 36px 32px 80px; }
-.main-stage { width: 100%; display: flex; justify-content: center; }
-.content-area { display: flex; gap: 28px; align-items: flex-start; width: 100%; max-width: 1200px; }
-.card-area { flex: 1; min-width: 0; max-width: 1100px; }
+.app-body { flex: 1; display: flex; justify-content: center; min-height: calc(100vh - 56px); padding: 36px 48px 80px; }
+.main-stage { width: 100%; max-width: 1400px; display: flex; justify-content: center; }
+.content-area { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 24px; }
+.card-area { flex: 1; min-width: 0; }
 
-.steps-rail { width: 64px; flex-shrink: 0; position: sticky; top: 92px; padding-top: 40px; }
-.rail-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); text-align: center; margin-bottom: 20px; }
+.steps-rail { width: 64px; flex-shrink: 0; position: sticky; top: 92px; padding-top: 16px; }
+.rail-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); text-align: center; margin-bottom: 12px; }
 .rail-track { display: flex; flex-direction: column; align-items: center; }
 .rail-node { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: none; cursor: default; padding: 4px; transition: all 0.3s var(--ease-out); }
 .rail-node.done { cursor: pointer; }

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useTheme } from '../composables/useTheme'
+import { useAuthStore } from '../stores/auth'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 
 const router = useRouter()
+const auth = useAuthStore()
 const { theme, toggle: toggleTheme } = useTheme()
 
 // 根据主题切换遮罩颜色
@@ -190,6 +192,15 @@ onUnmounted(() => {
           <button class="theme-toggle" @click="toggleTheme" :title="theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'">
             <span class="theme-icon">{{ theme === 'dark' ? '☀' : '☾' }}</span>
           </button>
+          <template v-if="auth.isAuthenticated">
+            <button class="btn btn-ghost btn-sm" @click="router.push('/dashboard')">仪表盘</button>
+            <div class="user-badge" :title="auth.user?.username || ''">
+              <span class="user-avatar">{{ (auth.user?.username || 'U')[0].toUpperCase() }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <button class="btn btn-ghost btn-sm" @click="router.push('/login')">登录</button>
+          </template>
           <button class="btn btn-primary btn-sm" @click="startCreate">开始创作</button>
         </div>
       </div>
@@ -214,7 +225,10 @@ onUnmounted(() => {
         </p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg" @click="startCreate">
-            <span>✦</span> 立即创作
+            <span>✦</span> 制作 PPT
+          </button>
+          <button class="btn btn-outline btn-lg" @click="router.push('/create-docx')">
+            <span>◈</span> 制作 DOCX
           </button>
           <a href="#features" class="btn btn-ghost btn-lg">了解更多 ↓</a>
         </div>
@@ -349,6 +363,18 @@ onUnmounted(() => {
 }
 .theme-toggle:hover { background: rgba(232,168,73,0.12); border-color: rgba(232,168,73,0.25); color: var(--amber); transform: rotate(30deg); }
 .theme-icon { font-size: 16px; }
+.user-badge {
+  display: flex; align-items: center; gap: 8px;
+}
+.user-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--amber), var(--amber-dim));
+  color: var(--ink-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  cursor: default;
+}
 
 /* ═══ 英雄区 — 水墨揭示 ═══ */
 .hero {

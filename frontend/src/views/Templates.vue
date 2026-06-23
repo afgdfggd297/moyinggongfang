@@ -4,14 +4,14 @@ import { useRouter } from 'vue-router'
 import { useTheme } from '../composables/useTheme'
 import { useAuthStore } from '../stores/auth'
 import * as templatesApi from '../api/templates'
-import type { Template, TemplateCategory } from '../api/templates'
+import type { Template } from '../api/templates'
 
 const router = useRouter()
 const { theme, toggle: toggleTheme } = useTheme()
 const authStore = useAuthStore()
 
 // Categories
-const categories: { key: TemplateCategory; label: string; icon: string }[] = [
+const categories: { key: string; label: string; icon: string }[] = [
   { key: 'all', label: '全部', icon: '◈' },
   { key: 'business', label: '商务', icon: '◆' },
   { key: 'academic', label: '学术', icon: '◇' },
@@ -23,7 +23,7 @@ const categories: { key: TemplateCategory; label: string; icon: string }[] = [
 // State
 const templates = ref<Template[]>([])
 const loading = ref(true)
-const activeCategory = ref<TemplateCategory>('all')
+const activeCategory = ref<string>('all')
 const searchQuery = ref('')
 
 // Pagination
@@ -46,13 +46,12 @@ const filteredTemplates = computed(() => {
   return templates.value.filter(
     t =>
       t.name.toLowerCase().includes(query) ||
-      t.description.toLowerCase().includes(query) ||
-      t.tags.some(tag => tag.toLowerCase().includes(query))
+      (t.description || '').toLowerCase().includes(query)
   )
 })
 
 // Load templates
-async function loadTemplates(category?: TemplateCategory, page: number = 1) {
+async function loadTemplates(category?: string, page: number = 1) {
   loading.value = true
   try {
     const result = await templatesApi.getTemplates(
@@ -60,8 +59,8 @@ async function loadTemplates(category?: TemplateCategory, page: number = 1) {
       page,
       pageSize
     )
-    templates.value = result.items
-    totalPages.value = result.total_pages
+    templates.value = result.templates
+    totalPages.value = Math.ceil(result.total / pageSize)
     totalTemplates.value = result.total
     currentPage.value = result.page
   } catch (e) {
@@ -72,7 +71,7 @@ async function loadTemplates(category?: TemplateCategory, page: number = 1) {
 }
 
 // Actions
-function selectCategory(category: TemplateCategory) {
+function selectCategory(category: string) {
   activeCategory.value = category
   currentPage.value = 1
   loadTemplates(category)
@@ -239,14 +238,9 @@ onMounted(() => {
               </div>
               <p class="template-desc">{{ template.description }}</p>
               <div class="template-meta">
-                <span class="meta-item">{{ template.page_count }} 页</span>
+                <span class="meta-item">{{ template.style || '通用' }}</span>
                 <span class="meta-sep">·</span>
-                <span class="meta-item">{{ template.usage_count }} 次使用</span>
-              </div>
-              <div class="template-tags" v-if="template.tags.length > 0">
-                <span v-for="tag in template.tags.slice(0, 3)" :key="tag" class="tag">
-                  {{ tag }}
-                </span>
+                <span class="meta-item">{{ template.color_scheme || '默认' }}</span>
               </div>
             </div>
           </div>
@@ -286,13 +280,13 @@ onMounted(() => {
             <!-- 预览大图 -->
             <div class="preview-image">
               <img
-                v-if="previewTemplate.preview_url"
-                :src="previewTemplate.preview_url"
+                v-if="previewTemplate.thumbnail_url"
+                :src="previewTemplate.thumbnail_url"
                 :alt="previewTemplate.name"
               />
               <div v-else class="preview-placeholder">
                 <span>◈</span>
-                <p>预览图加载中...</p>
+                <p>暂无预览图</p>
               </div>
             </div>
 
@@ -307,27 +301,21 @@ onMounted(() => {
 
               <div class="preview-specs">
                 <div class="spec-item">
-                  <span class="spec-label">页数</span>
-                  <span class="spec-value">{{ previewTemplate.page_count }} 页</span>
-                </div>
-                <div class="spec-item">
                   <span class="spec-label">风格</span>
-                  <span class="spec-value">{{ previewTemplate.style }}</span>
+                  <span class="spec-value">{{ previewTemplate.style || '通用' }}</span>
                 </div>
                 <div class="spec-item">
                   <span class="spec-label">配色</span>
-                  <span class="spec-value">{{ previewTemplate.color_scheme }}</span>
+                  <span class="spec-value">{{ previewTemplate.color_scheme || '默认' }}</span>
                 </div>
                 <div class="spec-item">
-                  <span class="spec-label">使用次数</span>
-                  <span class="spec-value">{{ previewTemplate.usage_count }}</span>
+                  <span class="spec-label">分类</span>
+                  <span class="spec-value">{{ getCategoryLabel(previewTemplate.category || '') }}</span>
                 </div>
-              </div>
-
-              <div class="preview-tags" v-if="previewTemplate.tags.length > 0">
-                <span v-for="tag in previewTemplate.tags" :key="tag" class="tag">
-                  {{ tag }}
-                </span>
+                <div class="spec-item">
+                  <span class="spec-label">类型</span>
+                  <span class="spec-value">{{ previewTemplate.is_system ? '系统模板' : '用户模板' }}</span>
+                </div>
               </div>
 
               <div class="preview-actions">

@@ -1,65 +1,31 @@
 /** Dashboard API 服务 */
-import axios from 'axios'
-
-const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
-})
-
-// 请求拦截 — 自动注入 token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    console.log(`[Dashboard API] ${config.method?.toUpperCase()} ${config.url}`)
-    return config
-  },
-  (error) => {
-    console.error('[Dashboard API] 请求错误:', error)
-    return Promise.reject(error)
-  }
-)
-
-// 响应拦截
-api.interceptors.response.use(
-  (response) => {
-    console.log(`[Dashboard API] 响应 ${response.status}`)
-    return response
-  },
-  (error) => {
-    console.error('[Dashboard API] 响应错误:', error.response?.data || error.message)
-    return Promise.reject(error)
-  }
-)
+import api from './index'
 
 /** 统计数据 */
 export interface DashboardStats {
   total_plans: number
   exported_count: number
-  templates_count: number
+  draft_count: number
+  generated_count: number
+  recent_activity_count: number
 }
 
 /** 方案概要 */
 export interface PlanSummary {
-  plan_id: string
-  title: string
+  id: string
+  title: string | null
   status: string
+  suggested_style: string | null
   created_at: string
   updated_at: string
-  page_count: number
-  style: string
 }
 
 /** 分页响应 */
 export interface PaginatedResponse<T> {
-  items: T[]
+  plans: T[]
   total: number
   page: number
   page_size: number
-  total_pages: number
 }
 
 /** 获取统计数据 */

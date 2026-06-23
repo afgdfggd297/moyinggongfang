@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import { useTheme } from './composables/useTheme'
+import { useAuthStore } from './stores/auth'
 import { useRouter } from 'vue-router'
-import { ref, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()
+const auth = useAuthStore()
 const loading = ref(false)
+
+// Restore auth state on app init
+onMounted(async () => {
+  try {
+    await auth.checkAuth()
+  } catch (e) {
+    // Silently fail — user stays unauthenticated
+  }
+})
 
 router.beforeEach(() => { loading.value = true })
 router.afterEach(() => { setTimeout(() => { loading.value = false }, 300) })
