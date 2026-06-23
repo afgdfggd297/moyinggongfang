@@ -37,8 +37,22 @@ async function confirmPlan() {
   await store.confirmPlanStream()
 }
 
+// 历史记录
+const showHistory = ref(false)
+
+function toggleHistory() {
+  showHistory.value = !showHistory.value
+}
+
+function loadFromHistory(planId: string) {
+  store.loadPlan(planId)
+  showHistory.value = false
+}
+
+// 预览
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const previewScale = ref(0.7)
+const editMode = ref(false)
 
 function renderPreview() {
   if (!iframeRef.value || !store.htmlContent) return
@@ -78,6 +92,29 @@ ${store.htmlContent}
   doc.open()
   doc.write(fullHtml)
   doc.close()
+}
+
+function toggleEditMode() {
+  editMode.value = !editMode.value
+  const doc = iframeRef.value?.contentDocument || iframeRef.value?.contentWindow?.document
+  if (!doc) return
+
+  const body = doc.body
+  if (editMode.value) {
+    body.contentEditable = 'true'
+    body.style.cursor = 'text'
+  } else {
+    body.contentEditable = 'false'
+    body.style.cursor = ''
+  }
+}
+
+async function saveEdit() {
+  const doc = iframeRef.value?.contentDocument || iframeRef.value?.contentWindow?.document
+  if (!doc) return
+  store.htmlContent = doc.body.innerHTML
+  await store.saveEdit()
+  editMode.value = false
 }
 
 watch(() => store.htmlContent, () => {
@@ -124,6 +161,32 @@ onMounted(() => {
 
     <!-- 主体布局 -->
     <div class="app-body">
+      <!-- 历史记录侧边栏 -->
+      <aside class="history-sidebar" :class="{ show: showHistory }">
+        <div class="history-header">
+          <h3>历史记录</h3>
+          <button class="close-btn" @click="showHistory = false">✕</button>
+        </div>
+        <div class="history-list">
+          <div v-if="store.historyList.length === 0" class="history-empty">
+            暂无历史记录
+          </div>
+          <div
+            v-for="item in store.historyList"
+            :key="item.planId"
+            class="history-item"
+            :class="{ active: store.planId === item.planId }"
+            @click="loadFromHistory(item.planId)"
+          >
+            <div class="item-title">{{ item.title }}</div>
+            <div class="item-meta">
+              <span class="item-time">{{ item.time }}</span>
+              <button class="delete-btn" @click.stop="store.removeEntry(item.planId)">✕</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
       <main class="main-stage">
         <div class="content-area">
           <div class="card-area">
@@ -133,6 +196,9 @@ onMounted(() => {
               <div class="card-title">
                 <span class="icon">✦</span>
                 <span>输入内容</span>
+                <button class="history-btn" @click="toggleHistory" title="历史记录">
+                  <span>📋</span>
+                </button>
               </div>
               <p class="card-desc">输入你想生成文档的内容，AI 会自动规划文档结构。</p>
 
@@ -220,9 +286,30 @@ onMounted(() => {
                 <span>预览文档</span>
               </div>
 
+              <div class="toolbar">
+                <button class="tool-btn" :class="{ active: editMode }" @click="toggleEditMode">
+                  <span class="tool-icon">{{ editMode ? '✦' : '✎' }}</span>
+                  <span>{{ editMode ? '编辑中' : '开始编辑' }}</span>
+                </button>
+                <button class="tool-btn" @click="toggleHistory">
+                  <span class="tool-icon">📋</span>
+                  <span>历史</span>
+                </button>
+              </div>
+
               <div class="preview-container">
                 <iframe ref="iframeRef" class="preview-frame" :style="{ transform: `scale(${previewScale})` }" />
               </div>
+
+              <Transition name="slide-up">
+                <div v-if="editMode" class="save-strip">
+                  <span class="save-hint">编辑模式已开启，修改后点击保存</span>
+                  <div class="save-btns">
+                    <button class="btn btn-outline btn-sm" @click="editMode = false; renderPreview()">取消</button>
+                    <button class="btn btn-primary btn-sm" :disabled="store.loading" @click="saveEdit">保存修改</button>
+                  </div>
+                </div>
+              </Transition>
 
               <div class="actions">
                 <button class="btn btn-outline" @click="store.goToStep('plan')">← 返回方案</button>
@@ -368,6 +455,134 @@ onMounted(() => {
 .content-area { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 24px; }
 .card-area { flex: 1; min-width: 0; }
 
+/* 历史记录侧边栏 */
+.history-sidebar {
+  width: 280px;
+  background: var(--ink-mid);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: fixed;
+  left: -300px;
+  top: 80px;
+  z-index: 50;
+  transition: left 0.3s var(--ease-out);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.history-sidebar.show {
+  left: 20px;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.history-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.close-btn {
+  width: 28px; height: 28px;
+  border: none;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: var(--text-primary);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 20px 0;
+}
+
+.history-item {
+  padding: 12px;
+  background: var(--ink-light);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-item:hover {
+  border-color: rgba(232,168,73,0.2);
+  background: var(--ink);
+}
+
+.history-item.active {
+  border-color: var(--amber);
+  background: var(--amber-glow);
+}
+
+.item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.item-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.delete-btn {
+  width: 20px; height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.history-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  background: var(--vermillion-glow);
+  color: var(--vermillion);
+}
+
 .card {
   background: var(--ink-mid);
   border: 1px solid rgba(232, 168, 73, 0.08);
@@ -408,6 +623,26 @@ onMounted(() => {
 .card-title .icon {
   color: var(--amber);
   font-size: 18px;
+}
+
+.history-btn {
+  margin-left: auto;
+  width: 32px; height: 32px;
+  border: none;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.history-btn:hover {
+  background: rgba(232,168,73,0.12);
+  color: var(--amber);
 }
 
 .card-desc {
@@ -470,6 +705,44 @@ onMounted(() => {
 .checkbox-label input[type="checkbox"] {
   accent-color: var(--amber);
 }
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--ink-light);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s;
+  font-family: 'Outfit', sans-serif;
+}
+
+.tool-btn:hover {
+  border-color: rgba(255,255,255,0.12);
+  color: var(--text-primary);
+  background: var(--ink);
+}
+
+.tool-btn.active {
+  background: var(--amber-glow);
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+
+.tool-icon { font-size: 14px; }
 
 .plan-header {
   margin-bottom: 24px;
@@ -553,6 +826,36 @@ onMounted(() => {
   border: none;
   transform-origin: top left;
 }
+
+/* 保存栏 */
+.save-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: var(--amber-glow);
+  border: 1px solid rgba(232,168,73,0.12);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+
+.save-hint {
+  font-size: 13px;
+  color: var(--amber);
+  font-weight: 500;
+}
+
+.save-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm { padding: 8px 16px; font-size: 13px; }
+
+.slide-up-enter-active { transition: all 0.3s var(--ease-out); }
+.slide-up-leave-active { transition: all 0.2s var(--ease-out); }
+.slide-up-enter-from { opacity: 0; transform: translateY(8px); }
+.slide-up-leave-to { opacity: 0; transform: translateY(4px); }
 
 .download-content {
   text-align: center;
@@ -679,6 +982,10 @@ onMounted(() => {
 [data-theme="light"] .preview-container { border-color: rgba(0,0,0,0.06); }
 [data-theme="light"] .rail-arrow { color: rgba(0,0,0,0.1); }
 [data-theme="light"] .rail-dot { background: #F0ECE5; border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .history-sidebar { background: #ffffff; border-color: rgba(0,0,0,0.06); }
+[data-theme="light"] .history-item { background: #F0ECE5; border-color: rgba(0,0,0,0.04); }
+[data-theme="light"] .close-btn { background: rgba(0,0,0,0.04); }
+[data-theme="light"] .history-btn { background: rgba(0,0,0,0.04); }
 
 .global-error { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); background: var(--vermillion); color: white; padding: 14px 24px; border-radius: var(--radius); font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 30px rgba(212,93,76,0.4); cursor: pointer; z-index: 200; animation: errorIn 0.4s var(--ease-spring) both; }
 .error-icon { width: 20px; height: 20px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; }

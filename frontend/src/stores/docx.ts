@@ -3,10 +3,13 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as docxApi from '../api/docx'
 import type { DocxPlanResponse, DocxOutlineItem, DataSource } from '../api/docx'
+import { useHistory } from '../composables/useHistory'
 
 export type DocxStep = 'input' | 'plan' | 'preview' | 'download'
 
 export const useDocxStore = defineStore('docx', () => {
+  const { historyList, addEntry, removeEntry } = useHistory()
+
   // 状态
   const currentStep = ref<DocxStep>('input')
   const planId = ref('')
@@ -47,6 +50,7 @@ export const useDocxStore = defineStore('docx', () => {
       selectedStyle.value = result.suggested_style
       currentStep.value = 'plan'
 
+      addEntry(planId.value, title.value, 'plan')
       console.log('[DOCX Store] 方案创建成功:', result.plan_id)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '方案创建失败'
@@ -162,6 +166,37 @@ export const useDocxStore = defineStore('docx', () => {
     currentStep.value = step
   }
 
+  // 加载方案（从历史记录）
+  async function loadPlan(id: string) {
+    loading.value = true
+    error.value = ''
+    try {
+      const result = await docxApi.getDocxPlan(id)
+      planId.value = result.plan_id
+      title.value = result.title
+      outline.value = result.outline
+      suggestedStyle.value = result.suggested_style
+      planSummary.value = result.summary
+      dataSources.value = result.data_sources || []
+      selectedStyle.value = result.suggested_style
+      htmlContent.value = result.html_content || ''
+
+      if (htmlContent.value) {
+        currentStep.value = 'preview'
+      } else {
+        currentStep.value = 'plan'
+      }
+
+      console.log('[DOCX Store] 方案加载成功:', id)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '方案加载失败'
+      error.value = msg
+      console.error('[DOCX Store] 方案加载失败:', e)
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 重置
   function reset() {
     currentStep.value = 'input'
@@ -197,11 +232,14 @@ export const useDocxStore = defineStore('docx', () => {
     streamProgress,
     hasPlan,
     hasContent,
+    historyList,
     createPlan,
     confirmPlanStream,
     saveEdit,
     exportDocx,
     goToStep,
+    loadPlan,
+    removeEntry,
     reset,
   }
 })
