@@ -38,6 +38,17 @@ const docxStyles = [
   { value: 'report', label: '报告风格', icon: '○', desc: '数据驱动，结论明确' },
 ]
 
+// 进度百分比（基于内容长度估算）
+const progressPercent = computed(() => {
+  if (!store.streaming) return 0
+  const content = store.markdownContent
+  if (!content) return 10
+  // 假设目标内容约 5000 字符
+  const targetLength = 5000
+  const percent = Math.min(95, (content.length / targetLength) * 100)
+  return Math.max(10, percent)
+})
+
 async function submitPlan() {
   if (!inputText.value.trim()) return
   await store.createPlan(inputText.value, extraInfo.value, enableSearch.value)
@@ -64,17 +75,67 @@ const iframeRef = ref<HTMLIFrameElement | null>(null)
 const previewScale = ref(0.7)
 const editMode = ref(false)
 
+// 简单的 Markdown 转 HTML 函数
+function markdownToHtml(md: string): string {
+  if (!md) return ''
+
+  let html = md
+
+  // 标题
+  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>')
+  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>')
+  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>')
+
+  // 粗体和斜体
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
+
+  // 表格
+  html = html.replace(/^\|(.+)\|$/gim, (match) => {
+    const cells = match.split('|').filter(c => c.trim())
+    if (cells.some(c => c.trim().match(/^[-:]+$/))) {
+      return '' // 跳过分隔行
+    }
+    const isHeader = match.includes('---')
+    const tag = 'td'
+    const row = cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('')
+    return `<tr>${row}</tr>`
+  })
+  html = html.replace(/(<tr>.*<\/tr>\n?)+/gs, '<table>$&</table>')
+
+  // 无序列表
+  html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>')
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+
+  // 有序列表
+  html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<li>$1</li>')
+
+  // 引用
+  html = html.replace(/^\>\s+(.*$)/gim, '<blockquote>$1</blockquote>')
+
+  // 分隔线
+  html = html.replace(/^[-*_]{3,}$/gim, '<hr>')
+
+  // 段落（处理剩余的文本行）
+  html = html.replace(/^(?!<[a-z]|$)(.*$)/gim, '<p>$1</p>')
+
+  // 清理空行
+  html = html.replace(/\n\s*\n/g, '\n')
+
+  return html
+}
+
 function renderPreview() {
   if (!iframeRef.value || !store.markdownContent) return
   const doc = iframeRef.value.contentDocument || iframeRef.value.contentWindow?.document
   if (!doc) return
 
-  // 使用 marked.js 渲染 Markdown
+  const htmlContent = markdownToHtml(store.markdownContent)
+
   const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
   <style>
     body {
       font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
@@ -94,18 +155,12 @@ function renderPreview() {
     th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; }
     th { background: #f5f5f5; font-weight: 600; }
     tr:nth-child(even) { background: #fafafa; }
-    blockquote { border-left: 4px solid #e8a849; padding-left: 16px; margin-left: 0; color: #666; font-style: italic; }
-    code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
-    pre { background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto; }
-    pre code { background: transparent; padding: 0; }
+    blockquote { border-left: 4px solid #e8a849; padding-left: 16px; margin-left: 0; color: #666; font-style: italic; margin-bottom: 12px; }
     hr { border: none; border-top: 1px solid #ddd; margin: 32px 0; }
   </style>
 </head>
 <body>
-  <div id="content"></div>
-  <script>
-    document.getElementById('content').innerHTML = marked.parse(\`${store.markdownContent.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`);
-  <\/script>
+${htmlContent}
 </body>
 </html>`
 
@@ -389,6 +444,19 @@ onMounted(() => {
                   </span>
                 </button>
               </div>
+
+              <!-- 生成进度条 -->
+              <Transition name="fade">
+                <div v-if="store.streaming" class="progress-section">
+                  <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+                  </div>
+                  <div class="progress-info">
+                    <span class="progress-text">{{ store.streamProgress }}</span>
+                    <span class="progress-percent">{{ Math.round(progressPercent) }}%</span>
+                  </div>
+                </div>
+              </Transition>
             </div>
 
             <!-- 步骤3: 预览 -->
@@ -408,6 +476,12 @@ onMounted(() => {
                   <span class="tool-icon">📋</span>
                   <span>历史</span>
                 </button>
+                <div class="toolbar-right">
+                  <span class="content-info">
+                    <span class="info-label">字数</span>
+                    <span class="info-value">{{ store.markdownContent.length }}</span>
+                  </span>
+                </div>
               </div>
 
               <div class="preview-container">
@@ -427,7 +501,10 @@ onMounted(() => {
               <div class="actions">
                 <button class="btn btn-outline" @click="store.goToStep('plan')">← 返回方案</button>
                 <button class="btn btn-success" :disabled="store.loading" @click="store.exportDocx()">
-                  <span v-if="store.loading">导出中...</span>
+                  <span v-if="store.loading" class="btn-loading">
+                    <span class="btn-spinner" />
+                    导出中...
+                  </span>
                   <span v-else>导出 DOCX</span>
                 </button>
               </div>
@@ -993,6 +1070,76 @@ onMounted(() => {
 
 .tool-icon { font-size: 14px; }
 
+.toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.content-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.info-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.info-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+/* 进度条 */
+.progress-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--ink-light);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--amber), var(--amber-dim));
+  border-radius: 4px;
+  transition: width 0.3s var(--ease-out);
+}
+
+.progress-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.progress-percent {
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--amber);
+}
+
 /* 方案页面 */
 .plan-title-section {
   margin-bottom: 24px;
@@ -1389,6 +1536,8 @@ onMounted(() => {
   background: rgba(0,0,0,0.03);
 }
 [data-theme="light"] .history-btn { background: rgba(0,0,0,0.04); }
+[data-theme="light"] .progress-section { background: #F0ECE5; border-color: rgba(0,0,0,0.04); }
+[data-theme="light"] .progress-bar { background: rgba(0,0,0,0.1); }
 
 .global-error { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); background: var(--vermillion); color: white; padding: 14px 24px; border-radius: var(--radius); font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 30px rgba(212,93,76,0.4); cursor: pointer; z-index: 200; animation: errorIn 0.4s var(--ease-spring) both; }
 .error-icon { width: 20px; height: 20px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; }
