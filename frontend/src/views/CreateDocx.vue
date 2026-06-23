@@ -27,6 +27,16 @@ function isDone(key: string) { return currentIndex.value > (stepOrder[key] ?? 0)
 const inputText = ref('')
 const extraInfo = ref('')
 const enableSearch = ref(true)
+const focused = ref(false)
+
+// 文档风格
+const docxStyles = [
+  { value: 'formal', label: '正式商务', icon: '⬡', desc: '用词正式，结构严谨' },
+  { value: 'academic', label: '学术论文', icon: '◎', desc: '引用规范，论证严密' },
+  { value: 'technical', label: '技术文档', icon: '◈', desc: '术语准确，步骤清晰' },
+  { value: 'creative', label: '创意文档', icon: '✦', desc: '语言生动，形式多样' },
+  { value: 'report', label: '报告风格', icon: '○', desc: '数据驱动，结论明确' },
+]
 
 async function submitPlan() {
   if (!inputText.value.trim()) return
@@ -206,89 +216,169 @@ onMounted(() => {
         <div class="content-area">
           <div class="card-area">
             <!-- 步骤1: 输入 -->
-            <div v-if="isActive('input')" class="card">
+            <div v-if="isActive('input')" class="card input-card">
               <div class="corner-deco">01</div>
               <div class="card-title">
                 <span class="icon">✦</span>
-                <span>输入内容</span>
-                <button class="history-btn" @click="toggleHistory" title="历史记录">
-                  <span>📋</span>
-                </button>
+                <span>构思内容</span>
               </div>
-              <p class="card-desc">输入你想生成文档的内容，AI 会自动规划文档结构。</p>
 
-              <div class="form-group">
-                <label>主要内容 *</label>
+              <p class="card-desc">
+                将您的想法、大纲或素材交给 AI，它会为您规划出专业的文档方案。
+              </p>
+
+              <!-- 主输入区 -->
+              <div class="input-stage" :class="{ focused }">
+                <div class="input-label">
+                  <span class="label-dot" />
+                  文档内容
+                </div>
                 <textarea
                   v-model="inputText"
-                  class="form-textarea"
-                  rows="6"
-                  placeholder="例如：我们公司Q3业绩回顾，营收增长主要来自海外业务..."
+                  placeholder="在此输入您的文档内容…&#10;&#10;例如：关于人工智能发展趋势的分析报告，包含历史回顾、当前应用、未来展望三个部分…"
+                  @focus="focused = true"
+                  @blur="focused = false"
+                />
+                <div class="input-meta">
+                  <span class="char-count" :class="{ warn: inputText.length > 2000 }">
+                    {{ inputText.length }} 字
+                  </span>
+                </div>
+              </div>
+
+              <!-- 补充信息 -->
+              <div class="extra-stage">
+                <div class="input-label">
+                  <span class="label-dot dim" />
+                  补充说明 <span class="optional">可选</span>
+                </div>
+                <input
+                  v-model="extraInfo"
+                  type="text"
+                  placeholder="面向投资人、学术汇报、公司内部分享…"
                 />
               </div>
 
-              <div class="form-group">
-                <label>额外说明（可选）</label>
-                <input v-model="extraInfo" class="form-input" placeholder="补充说明或特殊要求..." />
+              <!-- 网络搜索开关 -->
+              <div class="search-toggle-row">
+                <div class="toggle-info">
+                  <span class="toggle-label">联网搜索</span>
+                  <span class="toggle-desc">开启后 AI 会自动搜索相关资料，生成更准确的方案</span>
+                </div>
+                <button
+                  class="toggle-switch"
+                  :class="{ on: enableSearch }"
+                  @click="enableSearch = !enableSearch"
+                >
+                  <span class="toggle-knob" />
+                </button>
               </div>
 
-              <div class="form-group">
-                <label class="checkbox-label">
-                  <input type="checkbox" v-model="enableSearch" />
-                  <span>联网搜索相关资料</span>
-                </label>
-              </div>
-
+              <!-- 操作 -->
               <div class="actions">
-                <button class="btn btn-primary" :disabled="!inputText.trim() || store.loading" @click="submitPlan">
-                  <span v-if="store.loading">规划中...</span>
-                  <span v-else>开始规划</span>
+                <button
+                  class="btn btn-primary"
+                  :disabled="store.loading || !inputText.trim()"
+                  @click="submitPlan"
+                >
+                  <span v-if="store.loading" class="btn-loading">
+                    <span class="btn-spinner" />
+                    规划中
+                  </span>
+                  <span v-else>
+                    <span class="btn-icon-text">→</span>
+                    开始规划方案
+                  </span>
                 </button>
               </div>
             </div>
 
             <!-- 步骤2: 方案 -->
-            <div v-else-if="isActive('plan')" class="card">
+            <div v-else-if="isActive('plan')" class="card plan-card">
               <div class="corner-deco">02</div>
               <div class="card-title">
                 <span class="icon">◈</span>
                 <span>文档方案</span>
               </div>
 
-              <div class="plan-header">
+              <!-- 标题 -->
+              <div class="plan-title-section">
                 <h2 class="plan-title">{{ store.title }}</h2>
                 <p class="plan-summary">{{ store.planSummary }}</p>
               </div>
 
-              <div class="outline-list">
-                <div v-for="(item, i) in store.outline" :key="i" class="outline-item">
-                  <div class="outline-header">
-                    <span class="outline-level">{{ '·'.repeat(item.level) }}</span>
-                    <span class="outline-title">{{ item.title }}</span>
-                    <span class="outline-type">{{ item.content_type }}</span>
-                  </div>
-                  <div class="outline-details" v-if="item.details.length">
-                    <div v-for="(d, j) in item.details" :key="j" class="outline-detail">- {{ d }}</div>
+              <!-- 大纲 -->
+              <div class="outline-section">
+                <div class="section-label">
+                  <span class="label-dot" />
+                  大纲结构
+                </div>
+                <div class="outline-list">
+                  <div v-for="(item, i) in store.outline" :key="i" class="outline-item">
+                    <div class="outline-header">
+                      <span class="outline-number">{{ i + 1 }}</span>
+                      <span class="outline-title">{{ item.title }}</span>
+                      <span class="outline-type">{{ item.content_type }}</span>
+                    </div>
+                    <div class="outline-details" v-if="item.details.length">
+                      <div v-for="(d, j) in item.details" :key="j" class="outline-detail">
+                        <span class="detail-bullet">•</span>
+                        {{ d }}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div class="form-group">
-                <label>文档风格</label>
-                <select v-model="store.selectedStyle" class="form-select">
-                  <option value="formal">正式商务</option>
-                  <option value="academic">学术论文</option>
-                  <option value="technical">技术文档</option>
-                  <option value="creative">创意文档</option>
-                  <option value="report">报告风格</option>
-                </select>
+              <!-- 风格选择 -->
+              <div class="style-section">
+                <div class="section-label">
+                  <span class="label-dot" />
+                  文档风格
+                </div>
+                <div class="style-grid">
+                  <button
+                    v-for="s in docxStyles"
+                    :key="s.value"
+                    class="style-card"
+                    :class="{ active: store.selectedStyle === s.value }"
+                    @click="store.selectedStyle = s.value"
+                  >
+                    <span class="style-icon">{{ s.icon }}</span>
+                    <span class="style-name">{{ s.label }}</span>
+                    <span class="style-desc">{{ s.desc }}</span>
+                  </button>
+                </div>
               </div>
 
+              <!-- 数据来源 -->
+              <div v-if="store.dataSources.length" class="sources-section">
+                <div class="section-label">
+                  <span class="label-dot" />
+                  参考资料
+                </div>
+                <div class="sources-list">
+                  <a v-for="(src, i) in store.dataSources" :key="i" :href="src.url" target="_blank" class="source-item">
+                    <span class="source-icon">{{ src.is_trusted ? '✓' : '◎' }}</span>
+                    <span class="source-title">{{ src.title }}</span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- 操作 -->
               <div class="actions">
-                <button class="btn btn-outline" @click="store.goToStep('input')">← 返回修改</button>
+                <button class="btn btn-outline" @click="store.goToStep('input')">
+                  <span class="btn-icon-text">←</span> 返回修改
+                </button>
                 <button class="btn btn-primary" :disabled="store.loading" @click="confirmPlan">
-                  <span v-if="store.streaming">{{ store.streamProgress || '生成中...' }}</span>
-                  <span v-else>确认并生成</span>
+                  <span v-if="store.streaming" class="btn-loading">
+                    <span class="btn-spinner" />
+                    {{ store.streamProgress || '生成中...' }}
+                  </span>
+                  <span v-else>
+                    <span class="btn-icon-text">→</span>
+                    确认并生成
+                  </span>
                 </button>
               </div>
             </div>
@@ -701,23 +791,71 @@ onMounted(() => {
   margin-bottom: 24px;
 }
 
-.form-group {
+/* 输入区域 */
+.input-stage {
+  margin-bottom: 20px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--ink-light);
+  padding: 16px;
+  transition: all 0.3s var(--ease-out);
+}
+.input-stage.focused {
+  border-color: var(--amber-dim);
+  box-shadow: 0 0 0 3px var(--amber-glow);
+  background: var(--ink);
+}
+
+.input-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
+}
+
+.label-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.label-dot.dim { opacity: 0.4; }
+
+.input-stage textarea {
+  width: 100%;
+  min-height: 120px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+  font-family: 'Noto Sans SC', 'Outfit', sans-serif;
+}
+.input-stage textarea::placeholder { color: var(--text-muted); }
+
+.input-meta {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.char-count {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+}
+.char-count.warn { color: var(--vermillion); }
+
+/* 补充信息 */
+.extra-stage {
   margin-bottom: 20px;
 }
-
-.form-group label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.form-textarea,
-.form-input,
-.form-select {
+.extra-stage input {
   width: 100%;
   padding: 12px 16px;
   background: var(--ink-light);
@@ -728,32 +866,86 @@ onMounted(() => {
   font-family: 'Outfit', sans-serif;
   transition: all 0.25s var(--ease-out);
 }
-
-.form-textarea:focus,
-.form-input:focus,
-.form-select:focus {
+.extra-stage input:focus {
   outline: none;
   border-color: var(--amber-dim);
   box-shadow: 0 0 0 3px var(--amber-glow);
 }
-
-.form-textarea {
-  resize: vertical;
-  min-height: 120px;
+.optional {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
-.checkbox-label {
+/* 搜索开关 */
+.search-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--ink-light);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+}
+.toggle-info { flex: 1; }
+.toggle-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.toggle-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.toggle-switch {
+  width: 44px; height: 24px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+.toggle-switch.on {
+  background: var(--amber);
+  border-color: var(--amber);
+}
+.toggle-knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.3s var(--ease-spring);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle-switch.on .toggle-knob {
+  transform: translateX(20px);
+}
+
+/* 按钮加载态 */
+.btn-loading {
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text-secondary);
 }
-
-.checkbox-label input[type="checkbox"] {
-  accent-color: var(--amber);
+.btn-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(12,14,20,0.2);
+  border-top-color: var(--ink-deep);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* 工具栏 */
 .toolbar {
@@ -793,7 +985,8 @@ onMounted(() => {
 
 .tool-icon { font-size: 14px; }
 
-.plan-header {
+/* 方案页面 */
+.plan-title-section {
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -813,52 +1006,191 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-.outline-list {
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 12px;
+}
+
+.outline-section {
   margin-bottom: 24px;
+}
+
+.outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .outline-item {
   padding: 12px 16px;
   background: var(--ink-light);
   border-radius: var(--radius-sm);
-  margin-bottom: 8px;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: all 0.2s;
+}
+
+.outline-item:hover {
+  border-color: rgba(232,168,73,0.15);
 }
 
 .outline-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 10px;
+  margin-bottom: 6px;
 }
 
-.outline-level {
+.outline-number {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--amber-glow);
   color: var(--amber);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .outline-title {
   font-weight: 600;
   color: var(--text-primary);
+  flex: 1;
 }
 
 .outline-type {
-  font-size: 11px;
-  padding: 2px 6px;
-  background: var(--amber-glow);
-  color: var(--amber);
-  border-radius: 4px;
-  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .outline-details {
-  padding-left: 20px;
+  padding-left: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .outline-detail {
   font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
+  display: flex;
+  gap: 8px;
+}
+
+.detail-bullet {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* 风格选择 */
+.style-section {
+  margin-bottom: 24px;
+}
+
+.style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.style-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px;
+  background: var(--ink-light);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.style-card:hover {
+  border-color: rgba(255,255,255,0.12);
+  background: var(--ink);
+}
+
+.style-card.active {
+  border-color: var(--amber);
+  background: var(--amber-glow);
+}
+
+.style-icon {
+  font-size: 20px;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.style-card.active .style-icon {
+  color: var(--amber);
+}
+
+.style-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.style-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* 数据来源 */
+.sources-section {
+  margin-bottom: 24px;
+}
+
+.sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.source-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--ink-light);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.source-item:hover {
+  background: var(--ink);
+}
+
+.source-icon {
+  font-size: 12px;
+  color: var(--jade);
+}
+
+.source-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preview-container {
@@ -1024,10 +1356,16 @@ onMounted(() => {
 .rail-arrow.filled { color: rgba(91,168,140,0.5); }
 
 [data-theme="light"] .card { background: #ffffff; border-color: rgba(0,0,0,0.06); }
-[data-theme="light"] .form-textarea,
-[data-theme="light"] .form-input,
-[data-theme="light"] .form-select { background: #F0ECE5; border-color: rgba(0,0,0,0.06); color: #1A1612; }
-[data-theme="light"] .outline-item { background: #F0ECE5; }
+[data-theme="light"] .input-stage { background: #F0ECE5; border-color: rgba(0,0,0,0.06); }
+[data-theme="light"] .input-stage.focused { background: #ffffff; }
+[data-theme="light"] .extra-stage input { background: #F0ECE5; border-color: rgba(0,0,0,0.06); color: #1A1612; }
+[data-theme="light"] .search-toggle-row { background: #F0ECE5; border-color: rgba(0,0,0,0.04); }
+[data-theme="light"] .outline-item { background: #F0ECE5; border-color: rgba(0,0,0,0.04); }
+[data-theme="light"] .outline-item:hover { border-color: rgba(232,168,73,0.2); }
+[data-theme="light"] .style-card { background: #F0ECE5; border-color: rgba(0,0,0,0.04); }
+[data-theme="light"] .style-card:hover { border-color: rgba(0,0,0,0.1); background: #E8E4DD; }
+[data-theme="light"] .source-item { background: #F0ECE5; }
+[data-theme="light"] .source-item:hover { background: #E8E4DD; }
 [data-theme="light"] .preview-container { border-color: rgba(0,0,0,0.06); }
 [data-theme="light"] .rail-arrow { color: rgba(0,0,0,0.1); }
 [data-theme="light"] .rail-dot { background: #F0ECE5; border-color: rgba(0,0,0,0.08); }
