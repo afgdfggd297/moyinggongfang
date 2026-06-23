@@ -2,9 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 系统依赖（Playwright 需要）
+# 系统依赖（Playwright + Pandoc）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget curl gnupg \
+    wget curl gnupg pandoc \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
     libgbm1 libpango-1.0-0 libcairo2 libasound2 \
