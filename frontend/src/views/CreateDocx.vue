@@ -79,7 +79,11 @@ function markdownToHtml(md: string): string {
 
   let html = md
 
-  // 标题
+  // 分隔线
+  html = html.replace(/^[-*_]{3,}$/gim, '<hr>')
+
+  // 标题（按级别从高到低处理，避免低级标题被重复匹配）
+  html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>')
   html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>')
   html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>')
   html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>')
@@ -88,17 +92,51 @@ function markdownToHtml(md: string): string {
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
 
-  // 表格
-  html = html.replace(/^\|(.+)\|$/gim, (match) => {
-    const cells = match.split('|').filter(c => c.trim())
-    if (cells.some(c => c.trim().match(/^[-:]+$/))) {
-      return ''
+  // 表格处理
+  const lines = html.split('\n')
+  let inTable = false
+  let tableHtml = ''
+  const processedLines: string[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+
+    if (line.match(/^\|(.+)\|$/)) {
+      if (!inTable) {
+        inTable = true
+        tableHtml = '<table>'
+      }
+
+      // 检查是否是分隔行
+      if (line.match(/^\|[\s\-:|]+\|$/)) {
+        continue
+      }
+
+      const cells = line.split('|').filter(c => c.trim() !== '')
+      const isHeader = i === 0 || (i > 0 && lines[i - 1].trim().match(/^\|[\s\-:|]+\|$/))
+
+      if (isHeader) {
+        tableHtml += '<thead><tr>' + cells.map(c => `<th>${c.trim()}</th>`).join('') + '</tr></thead>'
+      } else {
+        tableHtml += '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>'
+      }
+    } else {
+      if (inTable) {
+        inTable = false
+        tableHtml += '</table>'
+        processedLines.push(tableHtml)
+        tableHtml = ''
+      }
+      processedLines.push(line)
     }
-    const tag = 'td'
-    const row = cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('')
-    return `<tr>${row}</tr>`
-  })
-  html = html.replace(/(<tr>.*<\/tr>\n?)+/gs, '<table>$&</table>')
+  }
+
+  if (inTable) {
+    tableHtml += '</table>'
+    processedLines.push(tableHtml)
+  }
+
+  html = processedLines.join('\n')
 
   // 无序列表
   html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>')
@@ -110,16 +148,25 @@ function markdownToHtml(md: string): string {
   // 引用
   html = html.replace(/^\>\s+(.*$)/gim, '<blockquote>$1</blockquote>')
 
-  // 分隔线
-  html = html.replace(/^[-*_]{3,}$/gim, '<hr>')
+  // 段落（处理剩余的文本行，不处理已经是标签的行）
+  const finalLines = html.split('\n')
+  const result: string[] = []
 
-  // 段落
-  html = html.replace(/^(?!<[a-z]|$)(.*$)/gim, '<p>$1</p>')
+  for (const line of finalLines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      result.push('')
+      continue
+    }
+    // 如果已经是 HTML 标签，直接添加
+    if (trimmed.match(/^<(h[1-6]|p|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|hr|strong|em)/)) {
+      result.push(trimmed)
+    } else {
+      result.push(`<p>${trimmed}</p>`)
+    }
+  }
 
-  // 清理空行
-  html = html.replace(/\n\s*\n/g, '\n')
-
-  return html
+  return result.join('\n')
 }
 
 const renderedHtml = computed(() => markdownToHtml(store.markdownContent))
@@ -1337,20 +1384,20 @@ async function saveEdit() {
 
 .markdown-body ul,
 .markdown-body ol {
-  margin-bottom: 12px;
-  padding-left: 24px;
+  margin-bottom: 16px;
+  padding-left: 28px;
 }
 
 .markdown-body li {
   font-size: 15px;
-  line-height: 1.6;
-  margin-bottom: 6px;
+  line-height: 1.8;
+  margin-bottom: 8px;
 }
 
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .markdown-body th,
@@ -1373,10 +1420,9 @@ async function saveEdit() {
 .markdown-body blockquote {
   border-left: 4px solid #e8a849;
   padding-left: 16px;
-  margin-left: 0;
+  margin: 0 0 16px 0;
   color: #666;
   font-style: italic;
-  margin-bottom: 12px;
 }
 
 .markdown-body hr {
