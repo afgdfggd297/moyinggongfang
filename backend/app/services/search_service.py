@@ -21,6 +21,7 @@ class SearchService:
     def __init__(self):
         self._session = requests.Session()
         self._session.headers.update(HEADERS)
+        self._session.verify = False
 
     def search(self, query: str, max_results: int = 5) -> list[dict]:
         """Bing 搜索，返回 [{title, url}]"""

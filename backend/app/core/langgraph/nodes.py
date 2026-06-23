@@ -67,7 +67,7 @@ async def plan_node(state: PPTState) -> dict:
 
         result = await llm_service.call_json(messages, temperature=settings.LLM_PLAN_TEMPERATURE)
 
-        plan_id = str(uuid.uuid4())[:8]
+        plan_id = str(uuid.uuid4())
 
         logger.info("方案规划完成: plan_id=%s, title=%s", plan_id, result.get("title"))
 

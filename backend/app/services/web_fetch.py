@@ -126,7 +126,7 @@ def fetch_url(url: str) -> tuple[str, str, str]:
         logger.info("[WebFetch] 缓存命中: %s", url[:60])
         return cached
 
-    r = requests.get(url, headers=HEADERS, timeout=settings.SEARCH_TIMEOUT, allow_redirects=False)
+    r = requests.get(url, headers=HEADERS, timeout=settings.SEARCH_TIMEOUT, allow_redirects=False, verify=False)
     if 300 <= r.status_code < 400:
         location = r.headers.get("Location", "")
         if location:

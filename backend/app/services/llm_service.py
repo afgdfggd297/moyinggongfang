@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any, AsyncIterator, Optional
 
+import httpx
 import openai
 from tenacity import (
     retry,
@@ -30,6 +31,7 @@ class LLMService:
         self._client = openai.AsyncOpenAI(
             api_key=settings.MIMO_API_KEY or "placeholder",
             base_url=settings.MIMO_BASE_URL,
+            http_client=httpx.AsyncClient(verify=False),
         )
         logger.info("LLM 服务已初始化, model=%s", settings.MIMO_LLM_MODEL)
 

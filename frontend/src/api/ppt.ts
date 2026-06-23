@@ -1,5 +1,5 @@
 /** PPT API 服务 - 支持流式输出 */
-import axios from 'axios'
+import api from './index'
 import type {
   PlanRequest,
   PlanResponse,
@@ -10,37 +10,9 @@ import type {
   PPTResponse,
 } from '../types/ppt'
 
-const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 180000,
-  headers: { 'Content-Type': 'application/json' },
-})
-
-api.interceptors.request.use(
-  (config) => {
-    console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, config.data)
-    return config
-  },
-  (error) => {
-    console.error('[API] 请求错误:', error)
-    return Promise.reject(error)
-  }
-)
-
-api.interceptors.response.use(
-  (response) => {
-    console.log(`[API] 响应 ${response.status}:`, response.data)
-    return response
-  },
-  (error) => {
-    console.error('[API] 响应错误:', error.response?.data || error.message)
-    return Promise.reject(error)
-  }
-)
-
 /** 创建方案 */
 export async function createPlan(req: PlanRequest): Promise<PlanResponse> {
-  const { data } = await api.post<PlanResponse>('/ppt/plan', req)
+  const { data } = await api.post<PlanResponse>('/ppt/plan', req, { timeout: 180000 })
   return data
 }
 
@@ -52,7 +24,7 @@ export async function updatePlan(planId: string, updates: { title?: string; outl
 
 /** 确认方案并生成HTML（非流式） */
 export async function confirmPlan(req: ConfirmPlanRequest): Promise<GenerateResponse> {
-  const { data } = await api.post<GenerateResponse>('/ppt/confirm-plan', req)
+  const { data } = await api.post<GenerateResponse>('/ppt/confirm-plan', req, { timeout: 180000 })
   return data
 }
 
@@ -69,8 +41,6 @@ export async function confirmPlanStream(
   req: ConfirmPlanRequest,
   callbacks: StreamCallbacks
 ): Promise<void> {
-  console.log('[API] 开始流式生成, plan_id:', req.plan_id)
-
   const response = await fetch('/api/v1/ppt/confirm-plan/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -120,7 +90,7 @@ export async function confirmPlanStream(
             callbacks.onError?.(event.message)
             break
         }
-      } catch (e) {
+      } catch {
         console.warn('[API] 解析SSE事件失败:', line)
       }
     }
@@ -135,7 +105,7 @@ export async function editHtml(req: EditRequest): Promise<GenerateResponse> {
 
 /** 导出PPTX */
 export async function exportPptx(req: ExportRequest): Promise<PPTResponse> {
-  const { data } = await api.post<PPTResponse>('/ppt/export', req)
+  const { data } = await api.post<PPTResponse>('/ppt/export', req, { timeout: 180000 })
   return data
 }
 
@@ -153,5 +123,18 @@ export async function getHtml(planId: string): Promise<{ plan_id: string; html_c
 /** 获取方案完整数据 */
 export async function getPlan(planId: string): Promise<PlanResponse & { html_content: string }> {
   const { data } = await api.get(`/ppt/plan/${planId}`)
+  return data
+}
+
+/** 单页重生成 */
+export async function regenerateSlide(
+  planId: string,
+  slideIndex: number,
+  userInstruction: string = ''
+): Promise<{ plan_id: string; html_content: string; slide_index: number }> {
+  const { data } = await api.post('/ppt/regenerate-slide', null, {
+    params: { plan_id: planId, slide_index: slideIndex, user_instruction: userInstruction },
+    timeout: 120000,
+  })
   return data
 }
