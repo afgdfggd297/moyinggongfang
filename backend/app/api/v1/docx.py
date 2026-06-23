@@ -1,12 +1,11 @@
 """DOCX 生成 API 路由"""
 import asyncio
 import json
-import logging
+import os
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.docx import (
     DocxPlanRequest,
@@ -19,16 +18,20 @@ from app.schemas.docx import (
 )
 from app.core.langgraph.docx_graph import compile_docx_graph
 from app.core.config import get_settings
+from app.core.logging import get_logger
+from app.core.exceptions import (
+    PlanNotFoundError, EmptyContentError, GenerateError, ExportError,
+    FileNotFoundError, NotFoundError,
+)
 from app.services.llm_service import llm_service
 from app.core.security import get_current_user_optional, TokenPayload
-
-settings = get_settings()
 from app.services.docx_export import docx_export_service
 from app.services.redis_store import plan_store
 from app.db.database import async_session_factory
 from app.db import crud, models
 
-logger = logging.getLogger(__name__)
+settings = get_settings()
+logger = get_logger(__name__)
 router = APIRouter(prefix="/docx", tags=["docx"])
 
 # 编译工作流图
@@ -129,7 +132,7 @@ async def create_docx_plan(
         result = await docx_graph.ainvoke(state)
 
         if result.get("error"):
-            raise HTTPException(status_code=500, detail=result["error"])
+            raise GenerateError(result["error"])
 
         plan_id = result["plan_id"]
 
@@ -162,11 +165,11 @@ async def create_docx_plan(
             data_sources=result.get("data_sources", []),
         )
 
-    except HTTPException:
+    except GenerateError:
         raise
     except Exception as e:
         logger.error("[docx_plan] 失败: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"方案规划失败: {str(e)}")
+        raise GenerateError(f"方案规划失败: {e}")
 
 
 @router.post("/confirm", response_model=DocxGenerateResponse)
@@ -177,7 +180,7 @@ async def confirm_docx_plan(
     """步骤2: 确认方案，生成文档内容（非流式）"""
     stored = await _get_stored_docx_plan(req.plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     from app.core.langgraph.docx_state import DocxState
 
@@ -207,7 +210,7 @@ async def confirm_docx_plan(
         result = await docx_graph.ainvoke(state)
 
         if result.get("error"):
-            raise HTTPException(status_code=500, detail=result["error"])
+            raise GenerateError(result["error"])
 
         markdown_content = result.get("markdown_content", "")
 
@@ -232,11 +235,11 @@ async def confirm_docx_plan(
             title=stored["title"],
         )
 
-    except HTTPException:
+    except GenerateError:
         raise
     except Exception as e:
         logger.error("[docx_confirm] 失败: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"内容生成失败: {str(e)}")
+        raise GenerateError(f"内容生成失败: {e}")
 
 
 @router.post("/confirm/stream")
@@ -247,7 +250,7 @@ async def confirm_docx_plan_stream(
     """步骤2: 确认方案，流式生成文档内容"""
     stored = await _get_stored_docx_plan(req.plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     from app.prompts.docx_content_prompt import DOCX_CONTENT_SYSTEM_PROMPT, build_docx_content_prompt
 
@@ -320,7 +323,7 @@ async def edit_docx_html(
     """步骤3: 用户编辑后提交HTML"""
     stored = await _get_stored_docx_plan(req.plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     stored["markdown_content"] = req.markdown_content
     stored["html_confirmed"] = True
@@ -339,46 +342,39 @@ async def export_docx(
     current_user: Optional[TokenPayload] = Depends(get_current_user_optional),
 ):
     """步骤4: 导出DOCX文件"""
-    try:
-        stored = await _get_stored_docx_plan(req.plan_id)
-        if not stored:
-            raise HTTPException(status_code=404, detail="方案不存在")
+    stored = await _get_stored_docx_plan(req.plan_id)
+    if not stored:
+        raise PlanNotFoundError()
 
-        markdown_content = req.markdown_content or stored.get("markdown_content", "")
-        if not markdown_content:
-            raise HTTPException(status_code=400, detail="HTML内容为空")
+    markdown_content = req.markdown_content or stored.get("markdown_content", "")
+    if not markdown_content:
+        raise EmptyContentError()
 
-        title = stored.get("title", "文档")
+    title = stored.get("title", "文档")
 
-        logger.info("[docx_export] 开始导出DOCX, plan_id=%s, markdown_length=%d", req.plan_id, len(markdown_content))
-        loop = asyncio.get_event_loop()
-        docx_path = await loop.run_in_executor(
-            None, docx_export_service.markdown_to_docx_sync, markdown_content, title, req.plan_id
-        )
+    logger.info("[docx_export] 开始导出DOCX, plan_id=%s, markdown_length=%d", req.plan_id, len(markdown_content))
+    loop = asyncio.get_event_loop()
+    docx_path = await loop.run_in_executor(
+        None, docx_export_service.markdown_to_docx_sync, markdown_content, title, req.plan_id
+    )
 
-        stored["docx_path"] = docx_path
-        stored["export_ready"] = True
-        plan_store.save(req.plan_id, stored)
+    stored["docx_path"] = docx_path
+    stored["export_ready"] = True
+    plan_store.save(req.plan_id, stored)
 
-        asyncio.create_task(_update_docx_plan_in_db(
-            req.plan_id,
-            pptx_path=docx_path,
-            status=models.PlanStatus.EXPORTED,
-        ))
+    asyncio.create_task(_update_docx_plan_in_db(
+        req.plan_id,
+        pptx_path=docx_path,
+        status=models.PlanStatus.EXPORTED,
+    ))
 
-        logger.info("[docx_export] 导出成功: %s", docx_path)
+    logger.info("[docx_export] 导出成功: %s", docx_path)
 
-        return DocxResponse(
-            success=True,
-            message="DOCX导出成功",
-            data={"plan_id": req.plan_id, "path": docx_path}
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("[docx_export] 失败: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
+    return DocxResponse(
+        success=True,
+        message="DOCX导出成功",
+        data={"plan_id": req.plan_id, "path": docx_path}
+    )
 
 
 @router.get("/download/{plan_id}")
@@ -386,15 +382,11 @@ async def download_docx(plan_id: str):
     """下载DOCX文件"""
     stored = await _get_stored_docx_plan(plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     docx_path = stored.get("docx_path", "")
-    if not docx_path:
-        raise HTTPException(status_code=400, detail="DOCX文件不存在")
-
-    import os
-    if not os.path.exists(docx_path):
-        raise HTTPException(status_code=404, detail="文件不存在")
+    if not docx_path or not os.path.exists(docx_path):
+        raise FileNotFoundError("DOCX文件不存在，请先导出")
 
     filename = f"{stored.get('title', '文档')}.docx"
     return FileResponse(
@@ -406,16 +398,17 @@ async def download_docx(plan_id: str):
 
 @router.get("/html/{plan_id}")
 async def get_docx_html(plan_id: str):
-    """获取HTML内容"""
+    """获取HTML预览内容（Markdown → HTML）"""
     stored = await _get_stored_docx_plan(plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     markdown_content = stored.get("markdown_content", "")
     if not markdown_content:
-        raise HTTPException(status_code=400, detail="HTML内容为空")
+        raise EmptyContentError()
 
-    return {"plan_id": plan_id, "markdown_content": markdown_content}
+    html_content = docx_export_service.markdown_to_html(markdown_content)
+    return {"plan_id": plan_id, "html_content": html_content}
 
 
 @router.get("/plan/{plan_id}")
@@ -423,7 +416,7 @@ async def get_docx_plan(plan_id: str):
     """获取方案完整数据"""
     stored = await _get_stored_docx_plan(plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     return {
         "plan_id": plan_id,

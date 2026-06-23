@@ -1,12 +1,13 @@
 """Template management API endpoints."""
-import logging
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenPayload, get_current_user
 from app.db.database import get_db
 from app.db.models import Template
@@ -17,7 +18,7 @@ from app.schemas.template import (
     TemplateResponse,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/templates", tags=["templates"])
 
 
@@ -83,13 +84,13 @@ async def get_template(
     try:
         tid = uuid.UUID(template_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid template ID format")
+        raise BadRequestError("无效的模板 ID 格式")
 
     result = await db.execute(select(Template).where(Template.id == tid))
     template = result.scalar_one_or_none()
 
     if template is None:
-        raise HTTPException(status_code=404, detail="Template not found")
+        raise NotFoundError("模板不存在")
 
     logger.info("[templates] get template: id=%s, name=%s", template_id, template.name)
     return TemplateDetailResponse.model_validate(template)

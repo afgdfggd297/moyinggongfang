@@ -3,13 +3,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.exceptions import AuthError
 
 # ── Configuration ───────────────────────────────────────────────────────────
 ALGORITHM = "HS256"
@@ -71,20 +72,12 @@ async def get_current_user(
     Raises 401 if the token is missing, malformed, or expired.
     """
     if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise AuthError("未提供认证凭据")
 
     try:
         token_data = decode_access_token(credentials.credentials)
     except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise AuthError("无效或过期的令牌")
 
     return token_data
 

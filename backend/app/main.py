@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
+from app.core.exceptions import register_exception_handlers
 from app.api.v1.ppt import router as ppt_router
 from app.api.v1.docx import router as docx_router
 from app.api.v1.templates import router as templates_router
@@ -55,6 +56,9 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+
+# 注册统一异常处理
+register_exception_handlers(app)
 
 # CORS
 app.add_middleware(

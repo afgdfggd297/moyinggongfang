@@ -1,10 +1,10 @@
 """Authentication API endpoints – wired to PostgreSQL via SQLAlchemy async."""
 
-import logging
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
+from app.core.exceptions import AuthError, ConflictError, NotFoundError, ForbiddenError
 from app.core.security import (
     TokenPayload,
     create_access_token,
@@ -23,7 +23,7 @@ from app.schemas.auth import (
     UserUpdate,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -57,18 +57,12 @@ async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
     # Check username uniqueness
     existing = await crud.get_user_by_username(db, body.username)
     if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username already taken",
-        )
+        raise ConflictError("用户名已被占用")
 
     # Check email uniqueness
     existing = await crud.get_user_by_email(db, body.email)
     if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
+        raise ConflictError("邮箱已被注册")
 
     # Create user in the database
     hashed = hash_password(body.password)
@@ -87,22 +81,13 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
     """Authenticate a user and return an access token."""
     user = await crud.get_user_by_username(db, body.username)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-        )
+        raise AuthError("用户名或密码错误")
 
     if not verify_password(body.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-        )
+        raise AuthError("用户名或密码错误")
 
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated",
-        )
+        raise ForbiddenError("账号已被禁用")
 
     return _build_token(user)
 
@@ -117,10 +102,7 @@ async def get_me(
 
     user = await crud.get_user_by_id(db, UUID(current_user.sub))
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise NotFoundError("用户不存在")
     return _user_response(user)
 
 
@@ -135,29 +117,20 @@ async def update_me(
 
     user = await crud.get_user_by_id(db, UUID(current_user.sub))
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise NotFoundError("用户不存在")
 
     # Username change – check uniqueness
     if body.username is not None and body.username != user.username:
         existing = await crud.get_user_by_username(db, body.username)
         if existing is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Username already taken",
-            )
+            raise ConflictError("用户名已被占用")
         user.username = body.username
 
     # Email change – check uniqueness
     if body.email is not None and body.email != user.email:
         existing = await crud.get_user_by_email(db, body.email)
         if existing is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email already registered",
-            )
+            raise ConflictError("邮箱已被注册")
         user.email = body.email
 
     if body.avatar_url is not None:

@@ -1,12 +1,13 @@
 """Dashboard API endpoints for user plan management."""
-import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenPayload, get_current_user
 from app.db.database import get_db
 from app.db.models import Plan, PlanStatus
@@ -18,7 +19,7 @@ from app.schemas.template import (
     RenamePlanRequest,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
@@ -158,7 +159,7 @@ async def delete_plan(
     try:
         pid = uuid.UUID(plan_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid plan ID format")
+        raise BadRequestError("无效的方案 ID 格式")
 
     user_id = uuid.UUID(current_user.sub)
     result = await db.execute(
@@ -167,7 +168,7 @@ async def delete_plan(
     plan = result.scalar_one_or_none()
 
     if plan is None:
-        raise HTTPException(status_code=404, detail="Plan not found")
+        raise NotFoundError("方案不存在")
 
     await db.delete(plan)
     await db.flush()
@@ -187,7 +188,7 @@ async def rename_plan(
     try:
         pid = uuid.UUID(plan_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid plan ID format")
+        raise BadRequestError("无效的方案 ID 格式")
 
     user_id = uuid.UUID(current_user.sub)
     result = await db.execute(
@@ -196,7 +197,7 @@ async def rename_plan(
     plan = result.scalar_one_or_none()
 
     if plan is None:
-        raise HTTPException(status_code=404, detail="Plan not found")
+        raise NotFoundError("方案不存在")
 
     plan.title = body.title
     await db.flush()
@@ -217,7 +218,7 @@ async def duplicate_plan(
     try:
         pid = uuid.UUID(plan_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid plan ID format")
+        raise BadRequestError("无效的方案 ID 格式")
 
     user_id = uuid.UUID(current_user.sub)
     result = await db.execute(
@@ -226,7 +227,7 @@ async def duplicate_plan(
     original = result.scalar_one_or_none()
 
     if original is None:
-        raise HTTPException(status_code=404, detail="Plan not found")
+        raise NotFoundError("方案不存在")
 
     # Create a copy
     new_title = body.new_title or f"{original.title or 'Untitled'} (Copy)"

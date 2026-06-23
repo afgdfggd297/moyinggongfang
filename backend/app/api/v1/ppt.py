@@ -1,12 +1,11 @@
 """PPT 生成 API 路由 - 支持流式输出"""
 import asyncio
 import json
-import logging
+import os
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.ppt import (
     PlanRequest,
@@ -20,16 +19,20 @@ from app.schemas.ppt import (
 )
 from app.core.langgraph.graph import compile_graph
 from app.core.config import get_settings
+from app.core.logging import get_logger
+from app.core.exceptions import (
+    PlanNotFoundError, EmptyContentError, GenerateError, ExportError,
+    FileNotFoundError, SlideIndexError, BadRequestError,
+)
 from app.services.llm_service import llm_service
 from app.core.security import get_current_user_optional, TokenPayload
-
-settings = get_settings()
 from app.services.ppt_export import ppt_export_service
 from app.services.redis_store import plan_store
 from app.db.database import async_session_factory
 from app.db import crud, models
 
-logger = logging.getLogger(__name__)
+settings = get_settings()
+logger = get_logger(__name__)
 router = APIRouter(prefix="/ppt", tags=["ppt"])
 
 # 编译工作流图
@@ -153,7 +156,7 @@ async def create_plan(
 
         if result.get("error"):
             logger.error("[plan] 方案规划失败: %s", result["error"])
-            raise HTTPException(status_code=500, detail=result["error"])
+            raise GenerateError(result["error"])
 
         plan_id = result["plan_id"]
 
@@ -187,11 +190,11 @@ async def create_plan(
             data_sources=result.get("data_sources", []),
         )
 
-    except HTTPException:
+    except GenerateError:
         raise
     except Exception as e:
         logger.error("[plan] 创建方案异常: %s", str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise GenerateError(f"方案创建失败: {e}")
 
 
 @router.post("/update-plan", response_model=PlanResponse)
@@ -199,7 +202,7 @@ async def update_plan(req: UpdatePlanRequest):
     """编辑方案 - 用户可修改标题和大纲"""
     stored = await _get_stored_plan(req.plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     if req.title is not None:
         stored["title"] = req.title
@@ -237,7 +240,7 @@ async def confirm_plan(req: ConfirmPlanRequest):
     try:
         stored = await _get_stored_plan(req.plan_id)
         if not stored:
-            raise HTTPException(status_code=404, detail="方案不存在，请重新创建")
+            raise PlanNotFoundError()
 
         state = _build_state(stored, req)
 
@@ -247,12 +250,12 @@ async def confirm_plan(req: ConfirmPlanRequest):
 
         if result.get("error"):
             logger.error("[confirm-plan] HTML生成失败: %s", result["error"])
-            raise HTTPException(status_code=500, detail=result["error"])
+            raise GenerateError(result["error"])
 
         html_content = result.get("html_content", "")
         logger.info("[confirm-plan] HTML生成成功, length=%d", len(html_content))
         if not html_content:
-            raise HTTPException(status_code=500, detail="HTML内容为空，LLM可能未返回有效内容")
+            raise EmptyContentError()
 
         _update_store(req.plan_id, req, html_content)
 
@@ -268,11 +271,11 @@ async def confirm_plan(req: ConfirmPlanRequest):
 
         return GenerateResponse(plan_id=req.plan_id, html_content=html_content, title=stored["title"])
 
-    except HTTPException:
+    except GenerateError:
         raise
     except Exception as e:
         logger.error("[confirm-plan] 异常: %s", str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise GenerateError(f"内容生成失败: {e}")
 
 
 @router.post("/confirm-plan/stream")
@@ -280,7 +283,7 @@ async def confirm_plan_stream(req: ConfirmPlanRequest):
     """步骤2: 确认方案并生成HTML PPT（SSE流式输出）"""
     stored = await _get_stored_plan(req.plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     async def event_generator():
         try:
@@ -315,7 +318,7 @@ async def confirm_plan_stream(req: ConfirmPlanRequest):
 
             # 流式调用LLM
             full_content = ""
-            async for chunk in llm_service.call_stream(messages, temperature=settings.LLM_STREAM_TEMPERATURE, max_tokens=16384):
+            async for chunk in llm_service.call_stream(messages, temperature=settings.LLM_STREAM_TEMPERATURE, max_tokens=settings.LLM_HTML_MAX_TOKENS):
                 full_content += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
@@ -366,7 +369,7 @@ async def edit_html(req: EditRequest):
     """步骤3: 用户编辑后提交HTML"""
     stored = await _get_stored_plan(req.plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     stored["html_content"] = req.html_content
     stored["html_confirmed"] = True
@@ -389,15 +392,15 @@ async def regenerate_slide(
     """单页重生成：只重新生成指定索引的幻灯片"""
     stored = await _get_stored_plan(plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     html_content = stored.get("html_content", "")
     if not html_content:
-        raise HTTPException(status_code=400, detail="HTML内容为空")
+        raise EmptyContentError()
 
     outline = stored.get("outline", [])
     if slide_index < 0 or slide_index >= len(outline):
-        raise HTTPException(status_code=400, detail=f"slide_index 超出范围 (0-{len(outline)-1})")
+        raise SlideIndexError(len(outline) - 1)
 
     from app.services.slide_utils import split_slides, get_html_head, replace_slide
     from app.prompts.regenerate_slide_prompt import (
@@ -407,7 +410,7 @@ async def regenerate_slide(
 
     slides = split_slides(html_content)
     if slide_index >= len(slides):
-        raise HTTPException(status_code=400, detail="HTML 中实际 slide 数量与大纲不匹配")
+        raise BadRequestError("HTML 中实际 slide 数量与大纲不匹配")
 
     # 上下文 slides（前后各 1 页）
     prev_slide = slides[slide_index - 1] if slide_index > 0 else ""
@@ -431,14 +434,14 @@ async def regenerate_slide(
 
     try:
         new_slide = await llm_service.call(
-            messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=4096
+            messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=settings.LLM_MAX_TOKENS
         )
     except Exception as e:
         logger.error("[regenerate] LLM 调用失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"重生成失败: {str(e)}")
+        raise GenerateError(f"重生成失败: {e}")
 
     if not new_slide:
-        raise HTTPException(status_code=500, detail="LLM 返回空内容")
+        raise EmptyContentError()
 
     # 清理
     new_slide = new_slide.strip()
@@ -455,7 +458,7 @@ async def regenerate_slide(
         updated_html = replace_slide(html_content, slide_index, new_slide)
     except Exception as e:
         logger.error("[regenerate] 替换失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"替换失败: {str(e)}")
+        raise GenerateError(f"替换失败: {e}")
 
     # 更新存储
     stored["html_content"] = updated_html
@@ -473,11 +476,11 @@ async def export_pptx(req: ExportRequest):
     try:
         stored = await _get_stored_plan(req.plan_id)
         if not stored:
-            raise HTTPException(status_code=404, detail="方案不存在")
+            raise PlanNotFoundError()
 
         html_content = req.html_content or stored.get("html_content", "")
         if not html_content:
-            raise HTTPException(status_code=400, detail="HTML内容为空")
+            raise EmptyContentError()
 
         logger.info("[export] 开始导出PPTX, plan_id=%s, html_length=%d", req.plan_id, len(html_content))
         loop = asyncio.get_event_loop()
@@ -503,13 +506,11 @@ async def export_pptx(req: ExportRequest):
             data={"plan_id": req.plan_id, "download_url": f"/api/v1/ppt/download/{req.plan_id}"},
         )
 
-    except HTTPException:
+    except (PlanNotFoundError, EmptyContentError):
         raise
     except Exception as e:
         logger.error("[export] 导出异常: %s", str(e), exc_info=True)
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e) or "导出失败")
+        raise ExportError(f"导出失败: {e}")
 
 
 @router.get("/download/{plan_id}")
@@ -517,11 +518,11 @@ async def download_pptx(plan_id: str):
     """下载PPTX文件"""
     stored = await _get_stored_plan(plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     pptx_path = stored.get("pptx_path", "") or ppt_export_service.get_download_path(plan_id)
     if not pptx_path:
-        raise HTTPException(status_code=404, detail="PPT文件未生成，请先导出")
+        raise FileNotFoundError("PPT文件未生成，请先导出")
 
     logger.info("[download] 下载PPTX: %s", pptx_path)
     return FileResponse(
@@ -536,11 +537,11 @@ async def get_html(plan_id: str):
     """获取HTML内容"""
     stored = await _get_stored_plan(plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     html_content = stored.get("html_content", "")
     if not html_content:
-        raise HTTPException(status_code=404, detail="HTML未生成")
+        raise EmptyContentError()
 
     return {"plan_id": plan_id, "html_content": html_content}
 
@@ -550,7 +551,7 @@ async def get_plan(plan_id: str):
     """获取方案完整数据"""
     stored = await _get_stored_plan(plan_id)
     if not stored:
-        raise HTTPException(status_code=404, detail="方案不存在")
+        raise PlanNotFoundError()
 
     return {
         "plan_id": plan_id,
