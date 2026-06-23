@@ -1286,14 +1286,20 @@ async function saveEdit() {
   border-radius: var(--radius);
   overflow: hidden;
   margin-bottom: 24px;
-  background: white;
+  background: #f5f5f5;
   max-height: 600px;
   overflow-y: auto;
+  padding: 24px;
 }
 
 .preview-content {
-  padding: 32px 40px;
-  min-height: 400px;
+  background: white;
+  padding: 60px 72px;
+  min-height: 800px;
+  max-width: 800px;
+  margin: 0 auto;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  border-radius: 2px;
 }
 
 /* Markdown 样式 */
@@ -1552,7 +1558,8 @@ async function saveEdit() {
 [data-theme="light"] .style-card:hover { border-color: rgba(0,0,0,0.1); background: #E8E4DD; }
 [data-theme="light"] .source-item { background: #F0ECE5; }
 [data-theme="light"] .source-item:hover { background: #E8E4DD; }
-[data-theme="light"] .preview-container { border-color: rgba(0,0,0,0.06); background: #ffffff; }
+[data-theme="light"] .preview-container { border-color: rgba(0,0,0,0.06); background: #E5E1DA; }
+[data-theme="light"] .preview-content { background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
 [data-theme="light"] .rail-arrow { color: rgba(0,0,0,0.1); }
 [data-theme="light"] .rail-dot { background: #F0ECE5; border-color: rgba(0,0,0,0.08); }
 [data-theme="light"] .history-sidebar {
