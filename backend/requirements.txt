@@ -17,6 +17,7 @@ lxml==5.4.0
 
 # DOCX Export
 python-docx==1.1.2
+markdown==3.7
 
 # Config
 pydantic==2.11.5

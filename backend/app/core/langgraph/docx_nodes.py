@@ -113,26 +113,26 @@ async def docx_content_node(state: DocxState) -> dict:
         ]
 
         logger.info("[docx_content] 调用LLM, prompt长度=%d", len(user_prompt))
-        html_content = await llm_service.call(messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=16384)
-        logger.info("[docx_content] LLM返回原始长度=%d", len(html_content) if html_content else 0)
+        markdown_content = await llm_service.call(messages, temperature=settings.LLM_HTML_TEMPERATURE, max_tokens=16384)
+        logger.info("[docx_content] LLM返回原始长度=%d", len(markdown_content) if markdown_content else 0)
 
-        if not html_content:
-            return {"error": "LLM返回空内容", "current_step": "error", "html_content": ""}
+        if not markdown_content:
+            return {"error": "LLM返回空内容", "current_step": "error", "markdown_content": ""}
 
-        # 清理HTML内容
-        html_content = html_content.strip()
-        if html_content.startswith("```html"):
-            html_content = html_content[7:]
-        if html_content.startswith("```"):
-            html_content = html_content[3:]
-        if html_content.endswith("```"):
-            html_content = html_content[:-3]
-        html_content = html_content.strip()
+        # 清理 Markdown 内容
+        markdown_content = markdown_content.strip()
+        if markdown_content.startswith("```markdown"):
+            markdown_content = markdown_content[11:]
+        if markdown_content.startswith("```"):
+            markdown_content = markdown_content[3:]
+        if markdown_content.endswith("```"):
+            markdown_content = markdown_content[:-3]
+        markdown_content = markdown_content.strip()
 
-        logger.info("[docx_content] 清理后HTML长度=%d", len(html_content))
+        logger.info("[docx_content] 清理后Markdown长度=%d", len(markdown_content))
 
         return {
-            "html_content": html_content,
+            "markdown_content": markdown_content,
             "current_step": "content_done",
             "error": None,
             "messages": [AIMessage(content="文档内容生成完成")],

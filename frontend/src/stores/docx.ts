@@ -20,7 +20,7 @@ export const useDocxStore = defineStore('docx', () => {
   const dataSources = ref<DataSource[]>([])
   const selectedStyle = ref('formal')
   const customStyleDesc = ref('')
-  const htmlContent = ref('')
+  const markdownContent = ref('')
   const loading = ref(false)
   const error = ref('')
   const streaming = ref(false)
@@ -28,7 +28,7 @@ export const useDocxStore = defineStore('docx', () => {
 
   // 计算属性
   const hasPlan = computed(() => !!planId.value)
-  const hasContent = computed(() => !!htmlContent.value)
+  const hasContent = computed(() => !!markdownContent.value)
 
   // 创建方案
   async function createPlan(text: string, extraInfo?: string, enableSearch?: boolean) {
@@ -83,11 +83,11 @@ export const useDocxStore = defineStore('docx', () => {
             streamProgress.value = msg
           },
           onChunk: (chunk, full) => {
-            htmlContent.value = full
+            markdownContent.value = full
             streamProgress.value = `已生成 ${Math.floor(full.length / 1024)}KB...`
           },
           onDone: (html, t) => {
-            htmlContent.value = html
+            markdownContent.value = html
             title.value = t || title.value
             currentStep.value = 'preview'
             streamProgress.value = '生成完成'
@@ -110,14 +110,14 @@ export const useDocxStore = defineStore('docx', () => {
 
   // 保存编辑
   async function saveEdit() {
-    if (!planId.value || !htmlContent.value) return
+    if (!planId.value || !markdownContent.value) return
 
     loading.value = true
     error.value = ''
     try {
       await docxApi.editDocxHtml({
         plan_id: planId.value,
-        html_content: htmlContent.value,
+        html_content: markdownContent.value,
       })
       console.log('[DOCX Store] 编辑保存成功')
     } catch (e: unknown) {
@@ -131,14 +131,14 @@ export const useDocxStore = defineStore('docx', () => {
 
   // 导出DOCX
   async function exportDocx() {
-    if (!planId.value || !htmlContent.value) return
+    if (!planId.value || !markdownContent.value) return
 
     loading.value = true
     error.value = ''
     try {
       await docxApi.exportDocx({
         plan_id: planId.value,
-        html_content: htmlContent.value,
+        html_content: markdownContent.value,
       })
 
       // 触发下载
@@ -179,9 +179,9 @@ export const useDocxStore = defineStore('docx', () => {
       planSummary.value = result.summary
       dataSources.value = result.data_sources || []
       selectedStyle.value = result.suggested_style
-      htmlContent.value = result.html_content || ''
+      markdownContent.value = result.html_content || ''
 
-      if (htmlContent.value) {
+      if (markdownContent.value) {
         currentStep.value = 'preview'
       } else {
         currentStep.value = 'plan'
@@ -208,7 +208,7 @@ export const useDocxStore = defineStore('docx', () => {
     dataSources.value = []
     selectedStyle.value = 'formal'
     customStyleDesc.value = ''
-    htmlContent.value = ''
+    markdownContent.value = ''
     loading.value = false
     error.value = ''
     streaming.value = false
@@ -225,7 +225,7 @@ export const useDocxStore = defineStore('docx', () => {
     dataSources,
     selectedStyle,
     customStyleDesc,
-    htmlContent,
+    markdownContent,
     loading,
     error,
     streaming,

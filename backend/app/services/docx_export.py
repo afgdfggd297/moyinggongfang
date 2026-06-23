@@ -1,7 +1,8 @@
-"""DOCX 导出服务 - 使用 python-docx 生成 Word 文档"""
+"""DOCX 导出服务 - Markdown → DOCX"""
 import re
 import logging
 from pathlib import Path
+import markdown
 from bs4 import BeautifulSoup, Tag
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class DocxExportService:
-    """HTML 转 DOCX 导出服务"""
+    """Markdown → DOCX 导出服务"""
 
     def __init__(self):
         self.upload_dir = Path(settings.UPLOAD_DIR)
@@ -42,13 +43,28 @@ class DocxExportService:
         for run in heading.runs:
             run.font.name = '黑体'
 
-    def _add_paragraph(self, doc: Document, text: str, bold: bool = False):
+    def _add_paragraph(self, doc: Document, text: str, bold: bool = False, italic: bool = False):
         """添加段落"""
         p = doc.add_paragraph()
-        run = p.add_run(text)
-        run.bold = bold
-        run.font.name = '宋体'
-        run.font.size = Pt(12)
+        # 处理粗体和斜体
+        parts = re.split(r'(\*\*.*?\*\*|\*.*?\*)', text)
+        for part in parts:
+            if part.startswith('**') and part.endswith('**'):
+                run = p.add_run(part[2:-2])
+                run.bold = True
+                run.font.name = '宋体'
+                run.font.size = Pt(12)
+            elif part.startswith('*') and part.endswith('*'):
+                run = p.add_run(part[1:-1])
+                run.italic = True
+                run.font.name = '宋体'
+                run.font.size = Pt(12)
+            else:
+                run = p.add_run(part)
+                run.bold = bold
+                run.italic = italic
+                run.font.name = '宋体'
+                run.font.size = Pt(12)
 
     def _add_list(self, doc: Document, items: list, ordered: bool = False):
         """添加列表"""
@@ -80,48 +96,121 @@ class DocxExportService:
             for i, cell_text in enumerate(row_data):
                 row.cells[i].text = str(cell_text)
 
-    def _parse_html_content(self, html_content: str) -> list:
-        """解析HTML内容为结构化数据"""
-        soup = BeautifulSoup(html_content, 'html.parser')
-        elements = []
+    def _add_blockquote(self, doc: Document, text: str):
+        """添加引用"""
+        p = doc.add_paragraph()
+        p.paragraph_format.left_indent = Inches(0.5)
+        p.paragraph_format.border_left = Pt(2)
+        run = p.add_run(text)
+        run.italic = True
+        run.font.name = '宋体'
+        run.font.size = Pt(11)
+        run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
 
-        for elem in soup.children:
-            if isinstance(elem, Tag):
-                if elem.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-                    level = int(elem.name[1])
+    def _parse_markdown_content(self, md_content: str) -> list:
+        """解析 Markdown 内容为结构化数据"""
+        lines = md_content.split('\n')
+        elements = []
+        i = 0
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # 空行
+            if not line:
+                i += 1
+                continue
+
+            # 标题
+            if line.startswith('#'):
+                match = re.match(r'^(#{1,6})\s+(.+)$', line)
+                if match:
+                    level = len(match.group(1))
+                    text = match.group(2).strip()
                     elements.append({
                         'type': 'heading',
                         'level': level,
-                        'text': elem.get_text().strip()
+                        'text': text
                     })
-                elif elem.name == 'p':
-                    elements.append({
-                        'type': 'paragraph',
-                        'text': elem.get_text().strip()
-                    })
-                elif elem.name in ['ul', 'ol']:
-                    items = [li.get_text().strip() for li in elem.find_all('li')]
-                    elements.append({
-                        'type': 'list',
-                        'ordered': elem.name == 'ol',
-                        'items': items
-                    })
-                elif elem.name == 'table':
-                    headers = [th.get_text().strip() for th in elem.find_all('th')]
-                    rows = []
-                    for tr in elem.find_all('tr')[1:]:
-                        row = [td.get_text().strip() for td in tr.find_all('td')]
+                i += 1
+                continue
+
+            # 表格
+            if '|' in line and i + 1 < len(lines) and '---' in lines[i + 1]:
+                headers = [h.strip() for h in line.split('|') if h.strip()]
+                rows = []
+                i += 2  # 跳过表头和分隔行
+                while i < len(lines) and '|' in lines[i]:
+                    row = [cell.strip() for cell in lines[i].split('|') if cell.strip()]
+                    if row:
                         rows.append(row)
-                    elements.append({
-                        'type': 'table',
-                        'headers': headers,
-                        'rows': rows
-                    })
+                    i += 1
+                elements.append({
+                    'type': 'table',
+                    'headers': headers,
+                    'rows': rows
+                })
+                continue
+
+            # 引用
+            if line.startswith('>'):
+                quote_text = line[1:].strip()
+                elements.append({
+                    'type': 'blockquote',
+                    'text': quote_text
+                })
+                i += 1
+                continue
+
+            # 无序列表
+            if line.startswith('- ') or line.startswith('* '):
+                items = []
+                while i < len(lines) and (lines[i].strip().startswith('- ') or lines[i].strip().startswith('* ')):
+                    items.append(lines[i].strip()[2:])
+                    i += 1
+                elements.append({
+                    'type': 'list',
+                    'ordered': False,
+                    'items': items
+                })
+                continue
+
+            # 有序列表
+            if re.match(r'^\d+\.\s', line):
+                items = []
+                while i < len(lines) and re.match(r'^\d+\.\s', lines[i].strip()):
+                    items.append(re.sub(r'^\d+\.\s', '', lines[i].strip()))
+                    i += 1
+                elements.append({
+                    'type': 'list',
+                    'ordered': True,
+                    'items': items
+                })
+                continue
+
+            # 分隔线
+            if line.startswith('---') or line.startswith('***') or line.startswith('___'):
+                elements.append({
+                    'type': 'hr'
+                })
+                i += 1
+                continue
+
+            # 普通段落
+            para_text = line
+            i += 1
+            while i < len(lines) and lines[i].strip() and not lines[i].strip().startswith('#') and not lines[i].strip().startswith('- ') and not lines[i].strip().startswith('* ') and not lines[i].strip().startswith('>') and '|' not in lines[i]:
+                para_text += ' ' + lines[i].strip()
+                i += 1
+            elements.append({
+                'type': 'paragraph',
+                'text': para_text
+            })
 
         return elements
 
-    def html_to_docx(self, html_content: str, title: str, plan_id: str) -> str:
-        """将HTML内容转换为DOCX文件"""
+    def markdown_to_docx(self, md_content: str, title: str, plan_id: str) -> str:
+        """将 Markdown 内容转换为 DOCX 文件"""
         try:
             doc = Document()
             self._setup_styles(doc)
@@ -129,16 +218,20 @@ class DocxExportService:
             # 添加文档标题
             doc.add_heading(title, level=0)
 
-            # 解析HTML内容
-            elements = self._parse_html_content(html_content)
+            # 解析 Markdown 内容
+            elements = self._parse_markdown_content(md_content)
 
             for elem in elements:
                 elem_type = elem.get('type')
 
                 if elem_type == 'heading':
-                    self._add_heading(doc, elem['text'], elem['level'])
+                    level = elem.get('level', 1)
+                    # DOCX 支持 0-9 级标题，但通常只用 1-4 级
+                    if level > 4:
+                        level = 4
+                    self._add_heading(doc, elem['text'], level)
                 elif elem_type == 'paragraph':
-                    text = elem['text']
+                    text = elem.get('text', '')
                     if text:
                         self._add_paragraph(doc, text)
                 elif elem_type == 'list':
@@ -150,6 +243,12 @@ class DocxExportService:
                     rows = elem.get('rows', [])
                     if headers and rows:
                         self._add_table(doc, headers, rows)
+                elif elem_type == 'blockquote':
+                    text = elem.get('text', '')
+                    if text:
+                        self._add_blockquote(doc, text)
+                elif elem_type == 'hr':
+                    doc.add_paragraph('─' * 50)
 
             # 保存文件
             filename = f"docx_{plan_id}.docx"
@@ -163,9 +262,9 @@ class DocxExportService:
             logger.error("[docx_export] 导出失败: %s", str(e))
             raise
 
-    def html_to_docx_sync(self, html_content: str, title: str, plan_id: str) -> str:
+    def markdown_to_docx_sync(self, md_content: str, title: str, plan_id: str) -> str:
         """同步版本的导出方法"""
-        return self.html_to_docx(html_content, title, plan_id)
+        return self.markdown_to_docx(md_content, title, plan_id)
 
 
 # 全局实例

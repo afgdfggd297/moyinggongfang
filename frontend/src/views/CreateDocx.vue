@@ -65,14 +65,16 @@ const previewScale = ref(0.7)
 const editMode = ref(false)
 
 function renderPreview() {
-  if (!iframeRef.value || !store.htmlContent) return
+  if (!iframeRef.value || !store.markdownContent) return
   const doc = iframeRef.value.contentDocument || iframeRef.value.contentWindow?.document
   if (!doc) return
 
+  // 使用 marked.js 渲染 Markdown
   const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
   <style>
     body {
       font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
@@ -92,10 +94,18 @@ function renderPreview() {
     th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; }
     th { background: #f5f5f5; font-weight: 600; }
     tr:nth-child(even) { background: #fafafa; }
+    blockquote { border-left: 4px solid #e8a849; padding-left: 16px; margin-left: 0; color: #666; font-style: italic; }
+    code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+    pre { background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto; }
+    pre code { background: transparent; padding: 0; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 32px 0; }
   </style>
 </head>
 <body>
-${store.htmlContent}
+  <div id="content"></div>
+  <script>
+    document.getElementById('content').innerHTML = marked.parse(\`${store.markdownContent.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`);
+  <\/script>
 </body>
 </html>`
 
@@ -120,19 +130,17 @@ function toggleEditMode() {
 }
 
 async function saveEdit() {
-  const doc = iframeRef.value?.contentDocument || iframeRef.value?.contentWindow?.document
-  if (!doc) return
-  store.htmlContent = doc.body.innerHTML
+  // Markdown 编辑模式下，直接保存当前内容
   await store.saveEdit()
   editMode.value = false
 }
 
-watch(() => store.htmlContent, () => {
+watch(() => store.markdownContent, () => {
   nextTick(renderPreview)
 })
 
 onMounted(() => {
-  if (store.htmlContent) {
+  if (store.markdownContent) {
     nextTick(renderPreview)
   }
 })

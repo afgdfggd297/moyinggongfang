@@ -44,20 +44,20 @@ export interface DocxConfirmRequest {
 /** 生成响应 */
 export interface DocxGenerateResponse {
   plan_id: string
-  html_content: string
+  markdown_content: string
   title: string
 }
 
 /** 编辑请求 */
 export interface DocxEditRequest {
   plan_id: string
-  html_content: string
+  markdown_content: string
 }
 
 /** 导出请求 */
 export interface DocxExportRequest {
   plan_id: string
-  html_content: string
+  markdown_content: string
 }
 
 /** 通用响应 */
@@ -135,7 +135,7 @@ export async function confirmDocxPlanStream(
             callbacks.onChunk?.(event.content, fullContent)
             break
           case 'done':
-            callbacks.onDone?.(event.html_content, event.title)
+            callbacks.onDone?.(event.markdown_content, event.title)
             break
           case 'error':
             callbacks.onError?.(event.message)
@@ -166,13 +166,13 @@ export function getDocxDownloadUrl(planId: string): string {
 }
 
 /** 获取HTML内容 */
-export async function getDocxHtml(planId: string): Promise<{ plan_id: string; html_content: string }> {
+export async function getDocxHtml(planId: string): Promise<{ plan_id: string; markdown_content: string }> {
   const { data } = await api.get(`/docx/html/${planId}`)
   return data
 }
 
 /** 获取方案完整数据 */
-export async function getDocxPlan(planId: string): Promise<DocxPlanResponse & { html_content: string }> {
+export async function getDocxPlan(planId: string): Promise<DocxPlanResponse & { markdown_content: string }> {
   const { data } = await api.get(`/docx/plan/${planId}`)
   return data
 }

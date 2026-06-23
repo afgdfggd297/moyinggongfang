@@ -29,8 +29,8 @@ class DocxState(TypedDict):
 
     # 内容生成
     sections: list[dict]          # 各章节内容 [{title, content, level}]
-    html_content: str             # 生成的HTML内容（预览用）
-    html_confirmed: bool          # HTML是否已确认
+    markdown_content: str         # 生成的Markdown内容
+    markdown_confirmed: bool      # Markdown是否已确认
 
     # 导出
     docx_path: str                # DOCX文件路径

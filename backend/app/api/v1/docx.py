@@ -87,7 +87,7 @@ async def _get_stored_docx_plan(plan_id: str) -> Optional[dict]:
                     "outline": plan.outline,
                     "suggested_style": plan.suggested_style,
                     "plan_summary": plan.plan_summary,
-                    "html_content": plan.html_content,
+                    "markdown_content": plan.markdown_content,
                     "user_text": plan.user_text,
                     "extra_info": plan.extra_info,
                     "data_sources": plan.data_sources,
@@ -118,7 +118,7 @@ async def create_docx_plan(
             "custom_style": "",
             "plan_confirmed": False,
             "sections": [],
-            "html_content": "",
+            "markdown_content": "",
             "html_confirmed": False,
             "docx_path": "",
             "export_ready": False,
@@ -194,7 +194,7 @@ async def confirm_docx_plan(
         "custom_style": req.custom_style,
         "plan_confirmed": True,
         "sections": [],
-        "html_content": "",
+        "markdown_content": "",
         "html_confirmed": False,
         "docx_path": "",
         "export_ready": False,
@@ -209,10 +209,10 @@ async def confirm_docx_plan(
         if result.get("error"):
             raise HTTPException(status_code=500, detail=result["error"])
 
-        html_content = result.get("html_content", "")
+        markdown_content = result.get("markdown_content", "")
 
         # 更新存储
-        stored["html_content"] = html_content
+        stored["markdown_content"] = markdown_content
         stored["confirmed_style"] = req.style
         stored["current_step"] = "content_done"
         plan_store.save(req.plan_id, stored)
@@ -220,7 +220,7 @@ async def confirm_docx_plan(
         # 异步更新 PostgreSQL
         asyncio.create_task(_update_docx_plan_in_db(
             req.plan_id,
-            html_content=html_content,
+            markdown_content=markdown_content,
             confirmed_style=req.style,
         ))
 
@@ -228,7 +228,7 @@ async def confirm_docx_plan(
 
         return DocxGenerateResponse(
             plan_id=req.plan_id,
-            html_content=html_content,
+            markdown_content=markdown_content,
             title=stored["title"],
         )
 
@@ -274,30 +274,30 @@ async def confirm_docx_plan_stream(
                 yield json.dumps({"type": "chunk", "content": chunk}, ensure_ascii=False) + "\n"
 
             # 清理
-            html_content = full_content.strip()
-            if html_content.startswith("```html"):
-                html_content = html_content[7:]
-            if html_content.startswith("```"):
-                html_content = html_content[3:]
-            if html_content.endswith("```"):
-                html_content = html_content[:-3]
-            html_content = html_content.strip()
+            markdown_content = full_content.strip()
+            if markdown_content.startswith("```html"):
+                markdown_content = markdown_content[7:]
+            if markdown_content.startswith("```"):
+                markdown_content = markdown_content[3:]
+            if markdown_content.endswith("```"):
+                markdown_content = markdown_content[:-3]
+            markdown_content = markdown_content.strip()
 
             # 保存
-            stored["html_content"] = html_content
+            stored["markdown_content"] = markdown_content
             stored["confirmed_style"] = req.style
             stored["current_step"] = "content_done"
             plan_store.save(req.plan_id, stored)
 
             asyncio.create_task(_update_docx_plan_in_db(
                 req.plan_id,
-                html_content=html_content,
+                markdown_content=markdown_content,
                 confirmed_style=req.style,
             ))
 
             yield json.dumps({
                 "type": "done",
-                "html_content": html_content,
+                "markdown_content": markdown_content,
                 "title": stored["title"],
             }, ensure_ascii=False) + "\n"
 
@@ -326,15 +326,15 @@ async def edit_docx_html(
     if not stored:
         raise HTTPException(status_code=404, detail="方案不存在")
 
-    stored["html_content"] = req.html_content
+    stored["markdown_content"] = req.markdown_content
     stored["html_confirmed"] = True
     plan_store.save(req.plan_id, stored)
 
-    asyncio.create_task(_update_docx_plan_in_db(req.plan_id, html_content=req.html_content))
+    asyncio.create_task(_update_docx_plan_in_db(req.plan_id, markdown_content=req.markdown_content))
 
-    logger.info("[docx_edit] 保存编辑, plan_id=%s, length=%d", req.plan_id, len(req.html_content))
+    logger.info("[docx_edit] 保存编辑, plan_id=%s, length=%d", req.plan_id, len(req.markdown_content))
 
-    return DocxGenerateResponse(plan_id=req.plan_id, html_content=req.html_content, title=stored["title"])
+    return DocxGenerateResponse(plan_id=req.plan_id, markdown_content=req.markdown_content, title=stored["title"])
 
 
 @router.post("/export")
@@ -348,16 +348,16 @@ async def export_docx(
         if not stored:
             raise HTTPException(status_code=404, detail="方案不存在")
 
-        html_content = req.html_content or stored.get("html_content", "")
-        if not html_content:
+        markdown_content = req.markdown_content or stored.get("markdown_content", "")
+        if not markdown_content:
             raise HTTPException(status_code=400, detail="HTML内容为空")
 
         title = stored.get("title", "文档")
 
-        logger.info("[docx_export] 开始导出DOCX, plan_id=%s, html_length=%d", req.plan_id, len(html_content))
+        logger.info("[docx_export] 开始导出DOCX, plan_id=%s, markdown_length=%d", req.plan_id, len(markdown_content))
         loop = asyncio.get_event_loop()
         docx_path = await loop.run_in_executor(
-            None, docx_export_service.html_to_docx_sync, html_content, title, req.plan_id
+            None, docx_export_service.markdown_to_docx_sync, markdown_content, title, req.plan_id
         )
 
         stored["docx_path"] = docx_path
@@ -415,11 +415,11 @@ async def get_docx_html(plan_id: str):
     if not stored:
         raise HTTPException(status_code=404, detail="方案不存在")
 
-    html_content = stored.get("html_content", "")
-    if not html_content:
+    markdown_content = stored.get("markdown_content", "")
+    if not markdown_content:
         raise HTTPException(status_code=400, detail="HTML内容为空")
 
-    return {"plan_id": plan_id, "html_content": html_content}
+    return {"plan_id": plan_id, "markdown_content": markdown_content}
 
 
 @router.get("/plan/{plan_id}")
@@ -435,6 +435,6 @@ async def get_docx_plan(plan_id: str):
         "outline": stored.get("outline", []),
         "suggested_style": stored.get("suggested_style", "formal"),
         "summary": stored.get("plan_summary", ""),
-        "html_content": stored.get("html_content", ""),
+        "markdown_content": stored.get("markdown_content", ""),
         "data_sources": stored.get("data_sources", []),
     }
