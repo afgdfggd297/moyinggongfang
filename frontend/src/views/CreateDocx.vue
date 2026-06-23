@@ -4,6 +4,7 @@ import { useDocxStore } from '../stores/docx'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { useTheme } from '../composables/useTheme'
+import { DOCX_TARGET_LENGTH } from '../config'
 
 const store = useDocxStore()
 const auth = useAuthStore()
@@ -43,8 +44,7 @@ const progressPercent = computed(() => {
   if (!store.streaming) return 0
   const content = store.markdownContent
   if (!content) return 10
-  // 假设目标内容约 5000 字符
-  const targetLength = 5000
+  const targetLength = DOCX_TARGET_LENGTH
   const percent = Math.min(95, (content.length / targetLength) * 100)
   return Math.max(10, percent)
 })
@@ -73,108 +73,8 @@ function loadFromHistory(planId: string) {
 // 预览
 const editMode = ref(false)
 
-// 简单的 Markdown 转 HTML 函数
-function markdownToHtml(md: string): string {
-  if (!md) return ''
-
-  let html = md
-
-  // 分隔线
-  html = html.replace(/^[-*_]{3,}$/gim, '<hr>')
-
-  // 标题（按级别从高到低处理，避免低级标题被重复匹配）
-  html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>')
-  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>')
-  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>')
-  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>')
-
-  // 粗体和斜体
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
-
-  // 表格处理
-  const lines = html.split('\n')
-  let inTable = false
-  let tableHtml = ''
-  const processedLines: string[] = []
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-
-    if (line.match(/^\|(.+)\|$/)) {
-      if (!inTable) {
-        inTable = true
-        tableHtml = '<table>'
-      }
-
-      // 检查是否是分隔行
-      if (line.match(/^\|[\s\-:|]+\|$/)) {
-        continue
-      }
-
-      const cells = line.split('|').filter(c => c.trim() !== '')
-      const isHeader = i === 0 || (i > 0 && lines[i - 1].trim().match(/^\|[\s\-:|]+\|$/))
-
-      if (isHeader) {
-        tableHtml += '<thead><tr>' + cells.map(c => `<th>${c.trim()}</th>`).join('') + '</tr></thead>'
-      } else {
-        tableHtml += '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>'
-      }
-    } else {
-      if (inTable) {
-        inTable = false
-        tableHtml += '</table>'
-        processedLines.push(tableHtml)
-        tableHtml = ''
-      }
-      processedLines.push(line)
-    }
-  }
-
-  if (inTable) {
-    tableHtml += '</table>'
-    processedLines.push(tableHtml)
-  }
-
-  html = processedLines.join('\n')
-
-  // 无序列表（用临时标记避免和有序列表冲突）
-  html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<uli>$1</uli>')
-  html = html.replace(/(<uli>.*<\/uli>\n?)+/g, (match) => {
-    return '<ul>' + match.replace(/<\/?uli>/g, (t) => t.replace('uli', 'li')) + '</ul>'
-  })
-
-  // 有序列表
-  html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<oli>$1</oli>')
-  html = html.replace(/(<oli>.*<\/oli>\n?)+/g, (match) => {
-    return '<ol>' + match.replace(/<\/?oli>/g, (t) => t.replace('oli', 'li')) + '</ol>'
-  })
-
-  // 引用
-  html = html.replace(/^\>\s+(.*$)/gim, '<blockquote>$1</blockquote>')
-
-  // 段落（处理剩余的文本行，不处理已经是标签的行）
-  const finalLines = html.split('\n')
-  const result: string[] = []
-
-  for (const line of finalLines) {
-    const trimmed = line.trim()
-    if (!trimmed) {
-      result.push('')
-      continue
-    }
-    // 如果已经是 HTML 标签，直接添加
-    if (trimmed.match(/^<(h[1-6]|p|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|hr|strong|em|uli|oli)/)) {
-      result.push(trimmed)
-    } else {
-      result.push(`<p>${trimmed}</p>`)
-    }
-  }
-
-  return result.join('\n')
-}
-
-const renderedHtml = computed(() => markdownToHtml(store.markdownContent))
+// 使用后端返回的 HTML（由 markdown 库转换）
+const renderedHtml = computed(() => store.htmlContent)
 
 function toggleEditMode() {
   editMode.value = !editMode.value

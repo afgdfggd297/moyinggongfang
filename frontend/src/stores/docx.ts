@@ -21,6 +21,7 @@ export const useDocxStore = defineStore('docx', () => {
   const selectedStyle = ref('formal')
   const customStyleDesc = ref('')
   const markdownContent = ref('')
+  const htmlContent = ref('')  // 后端返回的 HTML 预览
   const loading = ref(false)
   const error = ref('')
   const streaming = ref(false)
@@ -29,6 +30,17 @@ export const useDocxStore = defineStore('docx', () => {
   // 计算属性
   const hasPlan = computed(() => !!planId.value)
   const hasContent = computed(() => !!markdownContent.value)
+
+  // 获取 HTML 预览
+  async function fetchHtml() {
+    if (!planId.value) return
+    try {
+      const result = await docxApi.getDocxHtml(planId.value)
+      htmlContent.value = result.html_content
+    } catch (e) {
+      console.error('[DOCX Store] 获取HTML预览失败:', e)
+    }
+  }
 
   // 创建方案
   async function createPlan(text: string, extraInfo?: string, enableSearch?: boolean) {
@@ -86,11 +98,13 @@ export const useDocxStore = defineStore('docx', () => {
             markdownContent.value = full
             streamProgress.value = `已生成 ${Math.floor(full.length / 1024)}KB...`
           },
-          onDone: (html, t) => {
-            markdownContent.value = html
+          onDone: (md, t) => {
+            markdownContent.value = md
             title.value = t || title.value
             currentStep.value = 'preview'
             streamProgress.value = '生成完成'
+            // 获取 HTML 预览
+            fetchHtml()
           },
           onError: (msg) => {
             error.value = msg
@@ -119,6 +133,8 @@ export const useDocxStore = defineStore('docx', () => {
         plan_id: planId.value,
         markdown_content: markdownContent.value,
       })
+      // 重新获取 HTML 预览
+      await fetchHtml()
       console.log('[DOCX Store] 编辑保存成功')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '保存失败'
@@ -183,6 +199,8 @@ export const useDocxStore = defineStore('docx', () => {
 
       if (markdownContent.value) {
         currentStep.value = 'preview'
+        // 获取 HTML 预览
+        await fetchHtml()
       } else {
         currentStep.value = 'plan'
       }
@@ -209,6 +227,7 @@ export const useDocxStore = defineStore('docx', () => {
     selectedStyle.value = 'formal'
     customStyleDesc.value = ''
     markdownContent.value = ''
+    htmlContent.value = ''
     loading.value = false
     error.value = ''
     streaming.value = false
@@ -226,6 +245,7 @@ export const useDocxStore = defineStore('docx', () => {
     selectedStyle,
     customStyleDesc,
     markdownContent,
+    htmlContent,
     loading,
     error,
     streaming,
@@ -236,6 +256,7 @@ export const useDocxStore = defineStore('docx', () => {
     createPlan,
     confirmPlanStream,
     saveEdit,
+    fetchHtml,
     exportDocx,
     goToStep,
     loadPlan,
