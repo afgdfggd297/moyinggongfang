@@ -1442,9 +1442,23 @@ async function saveEdit() {
 
 /* 预览滚动条 */
 .preview-container::-webkit-scrollbar { width: 8px; }
-.preview-container::-webkit-scrollbar-track { background: #f5f5f5; }
+.preview-container::-webkit-scrollbar-track { background: #f5f5f5; border-radius: 4px; }
 .preview-container::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
 .preview-container::-webkit-scrollbar-thumb:hover { background: #bbb; }
+
+/* 深色模式 - 模拟 Word 深色模式效果 */
+[data-theme="dark"] .preview-container {
+  background: #2a2a2a;
+}
+[data-theme="dark"] .preview-container::-webkit-scrollbar-track {
+  background: #3a3a3a;
+}
+[data-theme="dark"] .preview-container::-webkit-scrollbar-thumb {
+  background: #555;
+}
+[data-theme="dark"] .preview-container::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
 
 /* 保存栏 */
 .save-strip {
