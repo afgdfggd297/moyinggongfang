@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
 
+    # Security
+    SECRET_KEY: str = "inkpress-secret-key-change-in-production"
+
     # MiMo API
     MIMO_API_KEY: str = ""
     MIMO_BASE_URL: str = "https://token-plan-cn.xiaomimimo.com/v1"
@@ -26,6 +29,9 @@ class Settings(BaseSettings):
     # LLM 服务
     LLM_TOTAL_TIMEOUT: int = 120
     MAX_LLM_CALL_RETRIES: int = 3
+
+    # PostgreSQL
+    DATABASE_URL: str = "postgresql+asyncpg://nlit:nlit@localhost:54432/nlit"
 
     # Redis
     REDIS_URL: str = "redis://:deepresearch@127.0.0.1:6379/0"

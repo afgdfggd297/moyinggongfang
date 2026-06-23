@@ -14,13 +14,8 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# 数据库 URL（从配置读取，或使用默认值）
 settings = get_settings()
-DATABASE_URL: str = getattr(
-    settings,
-    "DATABASE_URL",
-    "postgresql+asyncpg://nlit:nlit@localhost:54432/nlit",
-)
+DATABASE_URL: str = settings.DATABASE_URL
 
 # 异步引擎
 engine = create_async_engine(

@@ -8,18 +8,33 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: moyin
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     environment:
       - REDIS_URL=redis://:deepresearch@redis:6379/0
+      - DATABASE_URL=postgresql+asyncpg://root:123456@postgres:5432/moyin
+      - SECRET_KEY=inkpress-secret-key-change-in-production
       - MIMO_API_KEY=${MIMO_API_KEY:-}
       - MIMO_BASE_URL=${MIMO_BASE_URL:-https://token-plan-cn.xiaomimimo.com/v1}
     volumes:
       - uploads:/app/uploads
     depends_on:
       - redis
+      - postgres
     restart: unless-stopped
 
   frontend:
@@ -32,4 +47,5 @@ services:
 
 volumes:
   redis_data:
+  pg_data:
   uploads:
