@@ -30,20 +30,20 @@ class DocxConfirmRequest(BaseModel):
 class DocxGenerateResponse(BaseModel):
     """生成结果"""
     plan_id: str
-    html_content: str
+    markdown_content: str
     title: str
 
 
 class DocxEditRequest(BaseModel):
     """用户编辑后提交"""
     plan_id: str
-    html_content: str
+    markdown_content: str
 
 
 class DocxExportRequest(BaseModel):
     """导出DOCX"""
     plan_id: str
-    html_content: str
+    markdown_content: str
 
 
 class DocxResponse(BaseModel):

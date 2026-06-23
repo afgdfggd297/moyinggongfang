@@ -117,7 +117,7 @@ export const useDocxStore = defineStore('docx', () => {
     try {
       await docxApi.editDocxHtml({
         plan_id: planId.value,
-        html_content: markdownContent.value,
+        markdown_content: markdownContent.value,
       })
       console.log('[DOCX Store] 编辑保存成功')
     } catch (e: unknown) {
@@ -138,7 +138,7 @@ export const useDocxStore = defineStore('docx', () => {
     try {
       await docxApi.exportDocx({
         plan_id: planId.value,
-        html_content: markdownContent.value,
+        markdown_content: markdownContent.value,
       })
 
       // 触发下载
@@ -179,7 +179,7 @@ export const useDocxStore = defineStore('docx', () => {
       planSummary.value = result.summary
       dataSources.value = result.data_sources || []
       selectedStyle.value = result.suggested_style
-      markdownContent.value = result.html_content || ''
+      markdownContent.value = result.markdown_content || ''
 
       if (markdownContent.value) {
         currentStep.value = 'preview'

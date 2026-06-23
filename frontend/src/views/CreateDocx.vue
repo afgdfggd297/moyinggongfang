@@ -138,12 +138,17 @@ function markdownToHtml(md: string): string {
 
   html = processedLines.join('\n')
 
-  // 无序列表
-  html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+  // 无序列表（用临时标记避免和有序列表冲突）
+  html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<uli>$1</uli>')
+  html = html.replace(/(<uli>.*<\/uli>\n?)+/g, (match) => {
+    return '<ul>' + match.replace(/<\/?uli>/g, (t) => t.replace('uli', 'li')) + '</ul>'
+  })
 
   // 有序列表
-  html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<li>$1</li>')
+  html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<oli>$1</oli>')
+  html = html.replace(/(<oli>.*<\/oli>\n?)+/g, (match) => {
+    return '<ol>' + match.replace(/<\/?oli>/g, (t) => t.replace('oli', 'li')) + '</ol>'
+  })
 
   // 引用
   html = html.replace(/^\>\s+(.*$)/gim, '<blockquote>$1</blockquote>')
@@ -159,7 +164,7 @@ function markdownToHtml(md: string): string {
       continue
     }
     // 如果已经是 HTML 标签，直接添加
-    if (trimmed.match(/^<(h[1-6]|p|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|hr|strong|em)/)) {
+    if (trimmed.match(/^<(h[1-6]|p|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|hr|strong|em|uli|oli)/)) {
       result.push(trimmed)
     } else {
       result.push(`<p>${trimmed}</p>`)

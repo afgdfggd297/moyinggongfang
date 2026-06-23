@@ -2,7 +2,6 @@
 import re
 import logging
 from pathlib import Path
-import markdown
 from bs4 import BeautifulSoup, Tag
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
@@ -68,12 +67,13 @@ class DocxExportService:
 
     def _add_list(self, doc: Document, items: list, ordered: bool = False):
         """添加列表"""
+        style_name = 'List Number' if ordered else 'List Bullet'
         for i, item in enumerate(items):
             if ordered:
                 p = doc.add_paragraph(f"{i+1}. {item}")
             else:
                 p = doc.add_paragraph(f"• {item}")
-            p.style = doc.styles['List Bullet']
+            p.style = doc.styles[style_name]
 
     def _add_table(self, doc: Document, headers: list, rows: list):
         """添加表格"""
@@ -199,7 +199,7 @@ class DocxExportService:
             # 普通段落
             para_text = line
             i += 1
-            while i < len(lines) and lines[i].strip() and not lines[i].strip().startswith('#') and not lines[i].strip().startswith('- ') and not lines[i].strip().startswith('* ') and not lines[i].strip().startswith('>') and '|' not in lines[i]:
+            while i < len(lines) and lines[i].strip() and not lines[i].strip().startswith('#') and not lines[i].strip().startswith('- ') and not lines[i].strip().startswith('* ') and not lines[i].strip().startswith('>') and not re.match(r'^\d+\.\s', lines[i].strip()) and '|' not in lines[i]:
                 para_text += ' ' + lines[i].strip()
                 i += 1
             elements.append({
